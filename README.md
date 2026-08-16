@@ -38,14 +38,17 @@ Implement `RecommendationEngine`. The frontend engine receives a normalized data
 
 The backend includes `cluster-ensemble-v2`, an optimized model-selection pipeline that:
 
-1. Builds a block-normalized feature matrix from perceptual OKLab values and an eight-dimensional SVD of L2-normalized TF-IDF historical-group vectors.
-2. Trains optimized K-means, Ward agglomerative clustering, and regularized diagonal-covariance Gaussian mixtures across several cluster counts.
+1. Builds a block-normalized feature matrix from rotation-equivariant OKLab values and an eight-dimensional SVD of L2-normalized TF-IDF historical-group vectors. Lightness is scaled separately while the chromatic `a/b` plane uses one isotropic scale.
+2. Trains optimized K-means, Ward agglomerative clustering, and regularized full-covariance Gaussian mixtures across several cluster counts, preserving co-membership when the complete color geometry is rotated.
 3. Holds out a seeded 20% of palette groups and measures recall and NDCG at 10 alongside silhouette, Calinski–Harabasz, and Davies–Bouldin scores.
 4. Combines outlier-resistant percentile ranks with a small parsimony term to select the best model without over-rewarding excess clusters.
-5. Projects arbitrary colors through an adaptive four-neighbor Gaussian kernel and compares soft cluster, TF-IDF group, and feature-centroid vectors.
-6. Uses a greedy determinantal point process objective to avoid redundant suggestions, plus hue-preserving OKLCH gamut mapping for generated colors.
+5. Calibrates soft-cluster temperature against held-out NDCG; for Wada, the validated rotation-equivariant K-means-10 model is the ranking backbone while Ward and Gaussian-mixture models provide candidate-level rank confidence.
+6. Learns support and contrast relationship archetypes from unique historical color pairs and includes their empirical mixture likelihood in every recommendation score.
+7. Scores explicit OKLCH color-wheel harmonies—monochromatic, analogous, tetradic, triadic, split-complementary, and complementary—with mode-sensitive emphasis and tonal handling for neutrals.
+8. Projects arbitrary colors through an adaptive four-neighbor Gaussian kernel and compares calibrated cluster, TF-IDF group, feature-centroid, historical-relation, classical-harmony, and perceptual-mood vectors.
+9. Uses a greedy determinantal point process objective to avoid redundant suggestions, plus hue-preserving OKLCH gamut mapping for generated colors.
 
-Recommendation evidence includes historic overlap, hue interval and lightness contrast, custom-input anchor names, and generated-color provenance. The interface can add a suggestion back into the composition, copy individual hex values or the complete CSS palette, and export a CSS file.
+Recommendation evidence includes historic overlap, hue interval and lightness contrast, cross-model rank agreement, support/contrast fit, custom-input anchor names, and generated-color provenance. Model diagnostics expose the calibrated family ensemble, learned relation mixture, and recommendation score weights. The interface can add a suggestion back into the composition, copy individual hex values or the complete CSS palette, and export a CSS file.
 
 Training is deterministic through a fixed random seed. Inspect the full candidate leaderboard and selected model at:
 
