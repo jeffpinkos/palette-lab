@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LabRuntime } from '../config/runtime'
-import type { ColorId, HarmonyMode, PaletteColor, PaletteDataset, Recommendation, RecommendationScope } from '../domain/palette'
+import type { ColorId, HarmonyMode, PaletteAssessment, PaletteColor, PaletteDataset, Recommendation, RecommendationScope } from '../domain/palette'
 
 export function usePaletteLab(runtime: LabRuntime) {
   const [dataset, setDataset] = useState<PaletteDataset | null>(null)
@@ -8,10 +8,13 @@ export function usePaletteLab(runtime: LabRuntime) {
   const [mode, setModeState] = useState<HarmonyMode>('balanced')
   const [scope, setScopeState] = useState<RecommendationScope>('palette')
   const [results, setResults] = useState<Recommendation[]>([])
+  const [assessment, setAssessment] = useState<PaletteAssessment | null>(null)
+  const [assessmentStatus, setAssessmentStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [namingCount, setNamingCount] = useState(0)
   const [status, setStatus] = useState<'loading' | 'ready' | 'recommending' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
+  const assessmentRequestId = useRef(0)
 
   useEffect(() => {
     let active = true
@@ -29,6 +32,24 @@ export function usePaletteLab(runtime: LabRuntime) {
     })
     return () => { active = false }
   }, [runtime])
+
+  useEffect(() => {
+    const activeRequest = ++assessmentRequestId.current
+    setAssessment(null)
+    if (!dataset || selected.length < 2 || !runtime.recommendationEngine.assess) {
+      setAssessmentStatus('idle')
+      return
+    }
+    setAssessmentStatus('loading')
+    void runtime.recommendationEngine.assess({ dataset, selectedColors: selected }).then((nextAssessment) => {
+      if (activeRequest !== assessmentRequestId.current) return
+      setAssessment(nextAssessment)
+      setAssessmentStatus('ready')
+    }).catch(() => {
+      if (activeRequest !== assessmentRequestId.current) return
+      setAssessmentStatus('error')
+    })
+  }, [dataset, runtime.recommendationEngine, selected])
 
   const generate = useCallback(async (nextMode = mode, nextScope = scope) => {
     if (!dataset || selected.length === 0) return
@@ -85,5 +106,5 @@ export function usePaletteLab(runtime: LabRuntime) {
 
   const searchColorNames = useCallback((query: string, limit?: number) => runtime.colorNamer.search(query, limit), [runtime.colorNamer])
 
-  return { dataset, selected, mode, scope, results, status, error, isNaming: namingCount > 0, addColor, removeColor, setMode, setScope, generate, searchColorNames }
+  return { dataset, selected, mode, scope, results, assessment, assessmentStatus, status, error, isNaming: namingCount > 0, addColor, removeColor, setMode, setScope, generate, searchColorNames }
 }

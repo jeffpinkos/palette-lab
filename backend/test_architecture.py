@@ -4,7 +4,7 @@ import pytest
 
 from .adapters.group_cooccurrence_engine import GroupCooccurrenceEngine
 from .adapters.grouped_json_palette import GroupedJsonPaletteProvider, JsonFieldMapping
-from .domain import PaletteColor, PaletteDataset, PaletteMetadata, Recommendation
+from .domain import PaletteAssessment, PaletteColor, PaletteDataset, PaletteMetadata, Recommendation
 from .registry import wada_provider
 from .service import RecommendationService
 
@@ -57,6 +57,7 @@ class CountingEngine:
         self.fits = 0
         self.dataset = None
         self.calls = []
+        self.assessment_calls = []
         self.__class__.instances.append(self)
 
     def fit(self, dataset):
@@ -68,6 +69,10 @@ class CountingEngine:
         selected_ids = {color.id for color in selected_colors}
         color = next(color for color in self.dataset.colors if color.id not in selected_ids)
         return [Recommendation(color, .5)][:limit]
+
+    def assess(self, selected_colors):
+        self.assessment_calls.append(selected_colors)
+        return PaletteAssessment("B", 74, "Strong fit", "Fixture assessment", ("Evidence",))
 
 
 @pytest.fixture(autouse=True)
@@ -93,6 +98,13 @@ class TestDomainSerialization:
 
     def test_recommendation_omits_absent_evidence(self):
         assert Recommendation(sample_dataset().colors[0], .5).as_dict()["evidence"] is None
+
+    def test_palette_assessment_serializes_artist_facing_grade(self):
+        assessment = PaletteAssessment("B", 74, "Strong Wada affinity", "Well supported.", ("Historic evidence",)).as_dict()
+        assert assessment == {
+            "grade": "B", "score": 74, "label": "Strong Wada affinity",
+            "summary": "Well supported.", "details": ("Historic evidence",),
+        }
 
 
 class TestGroupedJsonPaletteProvider:
@@ -282,6 +294,13 @@ class TestRecommendationService:
         result = service.recommend("sample", "counting", selected(sample_dataset(), "a"), "balanced", 4)
         assert result[0].score == .5
         assert result[0].color.id == "b"
+
+    def test_returns_optional_engine_assessment(self):
+        service, _ = self.service()
+        colors = selected(sample_dataset(), "a", "b")
+        assessment = service.assess("sample", "counting", colors)
+        assert (assessment.grade, assessment.score) == ("B", 74)
+        assert CountingEngine.instances[0].assessment_calls == [colors]
 
     def test_caches_separate_engine_per_palette(self):
         service, _ = self.service([sample_dataset("one"), sample_dataset("two")])

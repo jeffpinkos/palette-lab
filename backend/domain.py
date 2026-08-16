@@ -60,3 +60,21 @@ class Recommendation:
             "details": self.evidence_details,
         }
         return {"color": self.color.as_dict(), "score": round(self.score, 4), "evidence": evidence}
+
+
+@dataclass(frozen=True)
+class PaletteAssessment:
+    grade: str
+    score: Optional[int]
+    label: str
+    summary: str
+    details: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict:
+        return {
+            "grade": self.grade,
+            "score": self.score,
+            "label": self.label,
+            "summary": self.summary,
+            "details": self.details,
+        }

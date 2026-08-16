@@ -21,7 +21,7 @@ from sklearn.mixture import GaussianMixture
 from sklearn.preprocessing import StandardScaler, normalize
 
 from ..color_space import oklch_to_gamut_mapped_rgb, rgb_to_hex, rgb_to_oklab, rgb_to_oklch
-from ..domain import PaletteColor, PaletteDataset, Recommendation
+from ..domain import PaletteAssessment, PaletteColor, PaletteDataset, Recommendation
 
 
 @dataclass
@@ -47,6 +47,9 @@ class ScoredCandidate:
     family_scores: tuple[float, ...] = ()
     relation_fit: float = 0.5
     relation_name: str = "general"
+    lch: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    harmony_name: str = "general"
+    harmony_anchor: str = ""
 
 
 class ClusterEnsembleEngine:
@@ -80,6 +83,8 @@ class ClusterEnsembleEngine:
         },
     }
     _NEUTRAL_CHROMA = 0.025
+    _MIN_RESULT_DISTANCE = {"quiet": 0.035, "balanced": 0.050, "vivid": 0.065}
+    _PREFERRED_CHROMA_BOUNDS = {"quiet": {"maximum": 0.115}, "vivid": {"minimum": 0.120}}
 
     def __init__(self, random_state: int = 42, min_clusters: int = 3, max_clusters: int = 12):
         self._random_state = random_state
@@ -562,15 +567,16 @@ class ClusterEnsembleEngine:
         candidate_lch: tuple[float, float, float],
         selected_lch: np.ndarray,
         mode: str,
-    ) -> tuple[float, str, str]:
+        selected_names: tuple[str, ...] = (),
+    ) -> tuple[float, str, str, str]:
         """Score classical color-wheel relationships independently of history."""
         candidate_l, candidate_c, candidate_h = candidate_lch
         emphasis = self._HARMONY_EMPHASIS[mode]
         pair_scores: list[float] = []
         scheme_totals: dict[str, float] = defaultdict(float)
-        scheme_hue_deltas: dict[str, list[float]] = defaultdict(list)
+        scheme_matches: dict[str, list[tuple[float, int, Optional[float]]]] = defaultdict(list)
         lightness_deltas: list[float] = []
-        for selected_color_lch in selected_lch:
+        for selected_index, selected_color_lch in enumerate(selected_lch):
             selected_l, selected_c, selected_h = selected_color_lch
             lightness_delta = abs(float(selected_l - candidate_l))
             lightness_deltas.append(lightness_delta)
@@ -579,6 +585,7 @@ class ClusterEnsembleEngine:
                 tonal_score = emphasis["tonal"] * (0.65 + 0.35 * tonal_shape)
                 pair_scores.append(tonal_score)
                 scheme_totals["tonal"] += tonal_score
+                scheme_matches["tonal"].append((tonal_score, selected_index, None))
                 continue
 
             hue_delta = abs(float(selected_h - candidate_h))
@@ -593,18 +600,20 @@ class ClusterEnsembleEngine:
             score, name = max(scored_schemes)
             pair_scores.append(score)
             scheme_totals[name] += score
-            scheme_hue_deltas[name].append(hue_delta)
+            scheme_matches[name].append((score, selected_index, hue_delta))
 
         harmony_score = float(np.mean(pair_scores)) if pair_scores else 0.0
         harmony_name = max(scheme_totals, key=scheme_totals.get) if scheme_totals else "tonal"
         lightness_delta = float(np.mean(lightness_deltas)) if lightness_deltas else 0.0
         label = harmony_name.replace("-", " ")
-        if scheme_hue_deltas.get(harmony_name) and harmony_name != "tonal":
-            hue_delta = float(np.mean(scheme_hue_deltas[harmony_name]))
-            detail = f"{round(harmony_score * 100)}% classical harmony fit · {label} at {round(hue_delta)}° · ΔL {round(lightness_delta * 100)}"
+        dominant_match = max(scheme_matches.get(harmony_name, [(0.0, 0, None)]))
+        _, selected_index, hue_delta = dominant_match
+        anchor_name = selected_names[selected_index] if selected_index < len(selected_names) else f"selection {selected_index + 1}"
+        if hue_delta is not None and harmony_name != "tonal":
+            detail = f"{round(harmony_score * 100)}% classical harmony fit · {label} to {anchor_name} at {round(hue_delta)}° · ΔL {round(lightness_delta * 100)}"
         else:
-            detail = f"{round(harmony_score * 100)}% tonal harmony fit · ΔL {round(lightness_delta * 100)}"
-        return max(0.0, min(1.0, harmony_score)), harmony_name, detail
+            detail = f"{round(harmony_score * 100)}% tonal harmony fit with {anchor_name} · ΔL {round(lightness_delta * 100)}"
+        return max(0.0, min(1.0, harmony_score)), harmony_name, anchor_name, detail
 
     def _score_candidate(
         self,
@@ -616,12 +625,14 @@ class ClusterEnsembleEngine:
         selected_group_profile: np.ndarray,
         observed_groups: frozenset[str],
         custom_anchor_names: tuple[str, ...],
+        selected_names: tuple[str, ...],
         mode: str,
         scope: str,
     ) -> Optional[ScoredCandidate]:
         assert self._dataset is not None and self._features is not None and self._oklab_matrix is not None and self._oklch_matrix is not None
         assert self._selected is not None and self._cluster_memberships is not None and self._group_profiles is not None
         known_row = self._row_by_id.get(candidate.id)
+        candidate_anchor_names: tuple[str, ...] = ()
         if known_row is not None:
             candidate_groups = self._dataset.groups_by_color.get(candidate.id, frozenset())
             candidate_cluster_profiles = {
@@ -634,6 +645,7 @@ class ClusterEnsembleEngine:
             candidate_lab = tuple(self._oklab_matrix[known_row])
         else:
             candidate_anchors = self._anchor_weights(candidate)
+            candidate_anchor_names = tuple(anchor.name for anchor, _ in candidate_anchors)
             candidate_rows = [(self._row_by_id[anchor.id], weight) for anchor, weight in candidate_anchors]
             candidate_groups = frozenset().union(*(self._dataset.groups_by_color.get(anchor.id, frozenset()) for anchor, _ in candidate_anchors))
             candidate_cluster_profiles = {
@@ -656,7 +668,9 @@ class ClusterEnsembleEngine:
         distance = float(np.linalg.norm(candidate_feature_profile - selected_feature_profile))
         proximity = math.exp(-0.5 * (distance / max(self._feature_scale, 1e-9)) ** 2)
         mood, _ = self._mood_score(candidate_lch, selected_lch, mode)
-        harmony, _, harmony_detail = self._harmony_fit(candidate_lch, selected_lch, mode)
+        harmony, harmony_name, harmony_anchor, harmony_detail = self._harmony_fit(
+            candidate_lch, selected_lch, mode, selected_names,
+        )
         relation_fit, relation_name = self._relation_fit(
             candidate_lab, candidate_lch, selected_labs, selected_lch,
         )
@@ -673,16 +687,31 @@ class ClusterEnsembleEngine:
         primary_index = tuple(self._family_memberships).index(self._selected.algorithm)
         score = family_scores[primary_index]
         details = [harmony_detail]
+        if candidate_anchor_names:
+            details.append(f"Projected through Wada anchors: {', '.join(candidate_anchor_names)}")
         if custom_anchor_names:
             details.append(f"Input interpreted through {', '.join(custom_anchor_names)}")
         if shared:
             details.append(f"Appears through {shared} related Wada {'combination' if shared == 1 else 'combinations'}")
         if candidate.metadata.get("generated"):
             details.append("Generated in perceptual OKLCH space")
-        label = ("shared Wada group" if shared == 1 else "shared Wada groups") if shared else "model affinity"
+        if shared and candidate.metadata.get("generated"):
+            label = "related Wada group" if shared == 1 else "related Wada groups"
+        else:
+            label = ("shared Wada group" if shared == 1 else "shared Wada groups") if shared else "model affinity"
         value = shared if shared else round(max(group_affinity, cluster_affinity) * 100)
         recommendation = Recommendation(candidate, max(0.0, min(1.0, score)), label, value, tuple(details))
-        return ScoredCandidate(recommendation, candidate_lab, score, family_scores, relation_fit, relation_name)
+        return ScoredCandidate(
+            recommendation=recommendation,
+            lab=candidate_lab,
+            base_score=score,
+            family_scores=family_scores,
+            relation_fit=relation_fit,
+            relation_name=relation_name,
+            lch=candidate_lch,
+            harmony_name=harmony_name,
+            harmony_anchor=harmony_anchor,
+        )
 
     @staticmethod
     def _score_weights(scope: str) -> dict[str, float]:
@@ -727,27 +756,121 @@ class ClusterEnsembleEngine:
         squared = ((labs[:, None, :] - labs[None, :, :]) ** 2).sum(axis=2)
         return np.exp(-squared / max(2 * bandwidth ** 2, 1e-12))
 
-    def _rerank(self, candidates: list[ScoredCandidate], mode: str, limit: int) -> list[Recommendation]:
+    @staticmethod
+    def _palette_mode_fit(
+        recommendation_lch: np.ndarray,
+        selected_lch: np.ndarray,
+        mode: str,
+    ) -> float:
+        """Evaluate mood as a property of the complete palette, not one swatch."""
+        if recommendation_lch.size == 0:
+            return 0.0
+        complete = recommendation_lch if selected_lch.size == 0 else np.vstack((selected_lch, recommendation_lch))
+        chroma = complete[:, 1]
+        lightness = complete[:, 0]
+        mean_chroma = float(np.mean(chroma))
+        max_chroma = float(np.max(chroma))
+        value_range = float(np.ptp(lightness))
+        lightness_deltas = np.abs(lightness[:, None] - lightness[None, :])
+        contrast = float(lightness_deltas[np.triu_indices(len(lightness), 1)].mean()) if len(lightness) > 1 else 0.0
+
+        if mode == "quiet":
+            mean_fit = math.exp(-0.5 * (max(0.0, mean_chroma - 0.09) / 0.065) ** 2)
+            max_fit = math.exp(-0.5 * (max(0.0, max_chroma - 0.18) / 0.060) ** 2)
+            range_fit = math.exp(-0.5 * (max(0.0, value_range - 0.35) / 0.18) ** 2)
+            contrast_fit = math.exp(-0.5 * (max(0.0, contrast - 0.24) / 0.12) ** 2)
+        elif mode == "vivid":
+            mean_fit = min(1.0, mean_chroma / 0.17)
+            max_fit = min(1.0, max_chroma / 0.23)
+            range_fit = min(1.0, value_range / 0.48)
+            contrast_fit = min(1.0, contrast / 0.30)
+        else:
+            mean_fit = math.exp(-0.5 * ((mean_chroma - 0.14) / 0.08) ** 2)
+            max_fit = math.exp(-0.5 * ((max_chroma - 0.20) / 0.11) ** 2)
+            range_fit = math.exp(-0.5 * ((value_range - 0.38) / 0.24) ** 2)
+            contrast_fit = math.exp(-0.5 * ((contrast - 0.23) / 0.16) ** 2)
+        return 0.34 * mean_fit + 0.26 * max_fit + 0.22 * range_fit + 0.18 * contrast_fit
+
+    def _rerank(
+        self,
+        candidates: list[ScoredCandidate],
+        mode: str,
+        limit: int,
+        selected_lch: Optional[np.ndarray] = None,
+    ) -> list[Recommendation]:
         if not candidates or limit <= 0:
             return []
+        selected_lch = np.asarray(selected_lch if selected_lch is not None else np.empty((0, 3)))
         remaining = list(range(len(candidates)))
         chosen: list[int] = []
         diversity_weight = {"quiet": 0.025, "balanced": 0.065, "vivid": 0.10}[mode]
+        mode_weight = {"quiet": 0.35, "balanced": 0.12, "vivid": 0.70}[mode]
+        role_weight = {"quiet": 0.025, "balanced": 0.075, "vivid": 0.065}[mode]
         bandwidth = {"quiet": 0.07, "balanced": 0.10, "vivid": 0.13}[mode]
-        kernel = self._rbf_kernel(np.asarray([item.lab for item in candidates]), bandwidth)
+        labs = np.asarray([item.lab for item in candidates])
+        kernel = self._rbf_kernel(labs, bandwidth)
         quality = np.asarray([item.base_score for item in candidates])
         while remaining and len(chosen) < limit:
+            eligible = [
+                index for index in remaining
+                if not chosen or float(np.linalg.norm(labs[chosen] - labs[index], axis=1).min()) >= self._MIN_RESULT_DISTANCE[mode]
+            ]
+            if mode == "quiet":
+                quiet_candidates = [
+                    index for index in eligible
+                    if candidates[index].lch[1] <= self._PREFERRED_CHROMA_BOUNDS["quiet"]["maximum"]
+                ]
+                if quiet_candidates:
+                    eligible = quiet_candidates
+            elif mode == "vivid":
+                vivid_candidates = [
+                    index for index in eligible
+                    if candidates[index].lch[1] >= self._PREFERRED_CHROMA_BOUNDS["vivid"]["minimum"]
+                ]
+                if vivid_candidates:
+                    eligible = vivid_candidates
+            if not eligible:
+                break
+
+            role_counts = {
+                role: sum(candidates[index].harmony_name == role for index in chosen)
+                for role in {candidates[index].harmony_name for index in chosen}
+            }
+            within_role_cap = [
+                index for index in eligible
+                if candidates[index].harmony_name in {"tonal", "general"}
+                or role_counts.get(candidates[index].harmony_name, 0) < 2
+            ]
+            if within_role_cap:
+                eligible = within_role_cap
+
             if not chosen:
-                marginal = quality[remaining]
+                marginal = quality[eligible].copy()
             else:
                 chosen_kernel = kernel[np.ix_(chosen, chosen)] + np.eye(len(chosen)) * 1e-6
-                cross_kernel = kernel[np.ix_(chosen, remaining)]
+                cross_kernel = kernel[np.ix_(chosen, eligible)]
                 projection = np.linalg.solve(chosen_kernel, cross_kernel)
                 conditional_variance = 1.0 + 1e-6 - np.sum(cross_kernel * projection, axis=0)
                 logdet_gain = np.log(np.maximum(conditional_variance, 1e-12)).clip(-1.0, 0.0)
-                marginal = quality[remaining] + diversity_weight * logdet_gain
+                marginal = quality[eligible] + diversity_weight * logdet_gain
+
+            anchor_counts = {
+                anchor: sum(candidates[index].harmony_anchor == anchor for index in chosen)
+                for anchor in {candidates[index].harmony_anchor for index in chosen}
+            }
+            for position, index in enumerate(eligible):
+                trial_lch = np.asarray([candidates[item].lch for item in (*chosen, index)])
+                marginal[position] += mode_weight * self._palette_mode_fit(trial_lch, selected_lch, mode)
+                role = candidates[index].harmony_name
+                if role not in {"tonal", "general"}:
+                    marginal[position] += role_weight * (1.0 if role_counts.get(role, 0) == 0 else -role_counts[role])
+                anchor = candidates[index].harmony_anchor
+                if anchor and len(set(item.harmony_anchor for item in candidates)) > 1:
+                    marginal[position] += 0.025 if anchor_counts.get(anchor, 0) == 0 else -0.025 * anchor_counts[anchor]
             selected_position = int(np.argmax(marginal))
-            chosen.append(remaining.pop(selected_position))
+            selected_index = eligible[selected_position]
+            chosen.append(selected_index)
+            remaining.remove(selected_index)
         return [candidates[index].recommendation for index in chosen]
 
     def recommend(self, selected_colors: list[PaletteColor], mode: str = "balanced", limit: int = 4, scope: str = "palette") -> list[Recommendation]:
@@ -794,12 +917,131 @@ class ClusterEnsembleEngine:
             for scored_candidate in [self._score_candidate(
                 candidate, selected_labs, selected_lch, selected_feature_profile, selected_cluster_profiles,
                 selected_group_profile, frozenset(observed_groups),
-                tuple(dict.fromkeys(custom_anchor_names)), mode, scope,
+                tuple(dict.fromkeys(custom_anchor_names)), tuple(color.name for color in selected_colors), mode, scope,
             )]
             if scored_candidate is not None
         ]
         self._attach_consensus_confidence(scored)
-        return self._rerank(scored, mode, limit)
+        return self._rerank(scored, mode, limit, selected_lch)
+
+    @staticmethod
+    def _grade(score: int) -> tuple[str, str, str]:
+        if score >= 82:
+            return "A", "Historically grounded", "This palette strongly reflects Wada's recorded combinations and relationship structure."
+        if score >= 70:
+            return "B", "Strong Wada affinity", "This palette is well supported by Wada's archive, with only modest exploratory movement."
+        if score >= 57:
+            return "C", "Wada-adjacent", "This palette shares meaningful Wada structure while introducing relationships beyond the archive."
+        if score >= 42:
+            return "D", "Limited Wada support", "Some Wada characteristics are present, but the palette is primarily an interpretation."
+        return "F", "Exploratory departure", "This palette has little direct Wada support; treat it as a deliberate contemporary departure."
+
+    def assess(self, selected_colors: list[PaletteColor]) -> PaletteAssessment:
+        """Grade a selected palette against historical and learned Wada structure."""
+        if (
+            self._dataset is None or self._cluster_memberships is None
+            or self._oklab_matrix is None or self._oklch_matrix is None
+        ):
+            raise RuntimeError("Engine must be fit before assessment")
+        if len(selected_colors) < 2:
+            return PaletteAssessment(
+                "—", None, "Needs another color",
+                "Select at least two colors to grade their relationship against Wada.",
+            )
+
+        projected: list[dict] = []
+        for color in selected_colors:
+            anchors = self._anchor_weights(color)
+            rows = [(self._row_by_id[anchor.id], weight) for anchor, weight in anchors]
+            projected.append({
+                "anchors": anchors,
+                "clusters": {
+                    algorithm: self._mixture(memberships, rows)
+                    for algorithm, memberships in self._family_memberships.items()
+                },
+            })
+
+        selected_labs = [rgb_to_oklab(color.rgb) for color in selected_colors]
+        selected_lch = [rgb_to_oklch(color.rgb) for color in selected_colors]
+        historical_scores: list[float] = []
+        cluster_scores: list[float] = []
+        relation_scores: list[float] = []
+        harmony_scores: list[float] = []
+        direct_pair_matches = 0
+        pair_count = 0
+        for left_index in range(len(selected_colors)):
+            for right_index in range(left_index + 1, len(selected_colors)):
+                pair_count += 1
+                left_color = selected_colors[left_index]
+                right_color = selected_colors[right_index]
+                if left_color.id in self._row_by_id and right_color.id in self._row_by_id:
+                    left_groups = self._dataset.groups_by_color.get(left_color.id, frozenset())
+                    right_groups = self._dataset.groups_by_color.get(right_color.id, frozenset())
+                    direct_pair_matches += int(bool(left_groups & right_groups))
+
+                historical_fit = 0.0
+                for left_anchor, left_weight in projected[left_index]["anchors"]:
+                    left_groups = self._dataset.groups_by_color.get(left_anchor.id, frozenset())
+                    for right_anchor, right_weight in projected[right_index]["anchors"]:
+                        right_groups = self._dataset.groups_by_color.get(right_anchor.id, frozenset())
+                        shared = len(left_groups & right_groups)
+                        anchor_fit = 0.0 if shared == 0 else 0.70 + 0.30 * (1.0 - math.exp(-shared))
+                        historical_fit += left_weight * right_weight * anchor_fit
+                historical_scores.append(historical_fit)
+
+                cluster_scores.append(float(np.mean([
+                    np.sqrt(
+                        projected[left_index]["clusters"][algorithm]
+                        * projected[right_index]["clusters"][algorithm]
+                    ).sum()
+                    for algorithm in self._family_memberships
+                ])))
+                relation_scores.append(self._relation_fit(
+                    selected_labs[right_index], selected_lch[right_index],
+                    np.asarray([selected_labs[left_index]]), np.asarray([selected_lch[left_index]]),
+                )[0])
+                harmony_scores.append(self._harmony_fit(
+                    selected_lch[right_index], np.asarray([selected_lch[left_index]]),
+                    "balanced", (left_color.name,),
+                )[0])
+
+        historical_fit = 0.75 * float(np.mean(historical_scores)) + 0.25 * min(historical_scores)
+        cluster_fit = float(np.mean(cluster_scores))
+        relation_fit = float(np.mean(relation_scores))
+        harmony_fit = float(np.mean(harmony_scores))
+        known_colors = all(color.id in self._row_by_id for color in selected_colors)
+        common_groups = frozenset()
+        if known_colors:
+            common_groups = frozenset.intersection(*(
+                self._dataset.groups_by_color.get(color.id, frozenset())
+                for color in selected_colors
+            ))
+        projection_fit = float(np.mean([
+            math.exp(-0.5 * (sum(
+                weight * float(np.linalg.norm(np.asarray(rgb_to_oklab(color.rgb)) - self._oklab_matrix[self._row_by_id[anchor.id]]))
+                for anchor, weight in projected[index]["anchors"]
+            ) / 0.10) ** 2)
+            for index, color in enumerate(selected_colors)
+        ]))
+        raw_score = (
+            0.42 * historical_fit + 0.20 * cluster_fit + 0.20 * relation_fit
+            + 0.13 * harmony_fit + 0.05 * projection_fit
+            + (0.08 if common_groups else 0.0)
+        )
+        score = round(100 * max(0.0, min(1.0, raw_score)))
+        grade, label, summary = self._grade(score)
+        if known_colors:
+            historical_detail = f"{direct_pair_matches} of {pair_count} selected color pairs appear together in Wada's combinations."
+        else:
+            historical_detail = f"{round(historical_fit * 100)}% projected historical pair support through Wada anchors."
+        details = (
+            historical_detail,
+            f"{round(cluster_fit * 100)}% ensemble structure fit · {round(relation_fit * 100)}% historical relation fit.",
+            f"{round(harmony_fit * 100)}% classical harmony fit."
+        )
+        if common_groups:
+            details = (f"The complete palette appears in {len(common_groups)} Wada {'combination' if len(common_groups) == 1 else 'combinations'}.", *details)
+        return PaletteAssessment(grade, score, label, summary, details)
 
     def diagnostics(self) -> dict:
         if self._dataset is None or self._features is None or self._selected is None:
@@ -815,7 +1057,7 @@ class ClusterEnsembleEngine:
                 "colorSpace": "OKLab / OKLCH",
                 "featureDesign": "rotation-equivariant OKLab + L2-normalized TF-IDF group SVD",
                 "anchorProjection": "adaptive four-neighbor Gaussian kernel",
-                "paletteSelection": "greedy determinantal diversity",
+                "paletteSelection": "hard OKLab separation + palette-level mode, harmony-role, anchor, and determinantal diversity",
                 "validation": "seeded 20% group holdout",
                 "membershipCalibration": "held-out NDCG@10 temperature search",
                 "relationModel": "two-component historical pair mixture",
@@ -856,6 +1098,10 @@ class ClusterEnsembleEngine:
             "harmonyModel": {
                 "colorSpace": "OKLCH",
                 "neutralChromaThreshold": self._NEUTRAL_CHROMA,
+                "minimumResultDistance": self._MIN_RESULT_DISTANCE,
+                "preferredRecommendationChroma": self._PREFERRED_CHROMA_BOUNDS,
+                "paletteObjectives": ["mean chroma", "maximum chroma", "value range", "mean value contrast"],
+                "harmonyRoleSoftCap": 2,
                 "schemes": [
                     {"name": name, "targetDegrees": target, "toleranceDegrees": tolerance}
                     for name, target, tolerance in self._HARMONY_SCHEMES

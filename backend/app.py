@@ -29,6 +29,12 @@ class HarmonyRequest(BaseModel):
     limit: int = Field(default=4, ge=1, le=12)
 
 
+class PaletteAssessmentRequest(BaseModel):
+    palette_id: str
+    engine_id: str
+    colors: list[ColorInput] = Field(min_length=1, max_length=4)
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok", "palettes": service.palette_ids, "engines": service.engine_ids}
@@ -55,3 +61,13 @@ def recommend(request: HarmonyRequest):
     except (KeyError, ValueError) as error:
         raise HTTPException(400, str(error)) from error
     return {"recommendations": [recommendation.as_dict() for recommendation in recommendations]}
+
+
+@app.post("/api/assess")
+def assess(request: PaletteAssessmentRequest):
+    try:
+        selected = [PaletteColor(color.id, color.name, color.hex.lower(), color.rgb, {"custom": color.id.startswith("custom:")}) for color in request.colors]
+        assessment = service.assess(request.palette_id, request.engine_id, selected)
+    except (KeyError, ValueError) as error:
+        raise HTTPException(400, str(error)) from error
+    return {"assessment": assessment.as_dict() if assessment else None}

@@ -36,10 +36,23 @@ export type Recommendation = {
   evidence?: { label: string; value: number; details?: string[] }
 }
 
+export type PaletteAssessment = {
+  grade: string
+  score: number | null
+  label: string
+  summary: string
+  details: string[]
+}
+
 export type RecommendationRequest = {
   dataset: PaletteDataset
   selectedColors: PaletteColor[]
   mode: HarmonyMode
   scope: RecommendationScope
   limit: number
+}
+
+export type PaletteAssessmentRequest = {
+  dataset: PaletteDataset
+  selectedColors: PaletteColor[]
 }

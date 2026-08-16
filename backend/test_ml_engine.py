@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("sklearn")
 
 from .adapters.cluster_ensemble_engine import ClusterEnsembleEngine
+from .color_space import rgb_to_oklab, rgb_to_oklch
 from .domain import PaletteColor, PaletteDataset, PaletteMetadata
 from .registry import wada_provider
 
@@ -48,6 +49,11 @@ def test_requires_fit_for_inference():
 def test_requires_fit_for_diagnostics():
     with pytest.raises(RuntimeError, match="fit"):
         ClusterEnsembleEngine().diagnostics()
+
+
+def test_requires_fit_for_palette_assessment():
+    with pytest.raises(RuntimeError, match="fit"):
+        ClusterEnsembleEngine().assess(clustered_dataset().colors[:2])
 
 
 def test_rejects_too_few_colors():
@@ -123,6 +129,13 @@ def test_empty_selection_returns_empty(trained_engine):
     assert trained_engine.recommend([], "balanced", 4) == []
 
 
+def test_palette_assessment_requires_two_colors(trained_engine):
+    assessment = trained_engine.assess([clustered_dataset().colors[0]])
+    assert assessment.grade == "—"
+    assert assessment.score is None
+    assert "at least two" in assessment.summary
+
+
 @pytest.mark.parametrize("mode", ["quiet", "balanced", "vivid"])
 def test_all_modes_produce_finite_scores(trained_engine, mode):
     results = trained_engine.recommend([clustered_dataset().colors[0]], mode, 4)
@@ -148,6 +161,9 @@ def test_spectrum_scope_generates_continuous_colors(trained_engine):
     assert all(result.color.id.startswith("generated:") for result in results)
     assert all(result.color.metadata["generated"] is True for result in results)
     assert all(result.color.metadata["gamutMapped"] is True for result in results)
+    assert all(result.evidence_label in {"related Wada group", "related Wada groups", "model affinity"} for result in results)
+    assert all(any("Projected through Wada anchors:" in detail for detail in result.evidence_details) for result in results)
+    assert all("shared Wada" not in result.evidence_label for result in results)
     assert all("OKLCH" in result.evidence_details[-1] for result in results)
 
 
@@ -311,18 +327,20 @@ def test_recommendation_score_weights_are_normalized(scope):
 ])
 def test_classical_harmony_targets_are_recognized(degrees, expected):
     engine = ClusterEnsembleEngine()
-    score, name, detail = engine._harmony_fit(
-        (0.6, 0.15, degrees), np.asarray([[0.5, 0.15, 0.0]]), "balanced",
+    score, name, anchor, detail = engine._harmony_fit(
+        (0.6, 0.15, degrees), np.asarray([[0.5, 0.15, 0.0]]), "balanced", ("Etruscan Red",),
     )
     assert name == expected
+    assert anchor == "Etruscan Red"
     assert score >= 0.69
     assert expected.replace("-", " ") in detail
+    assert "to Etruscan Red" in detail
     assert "harmony fit" in detail
 
 
 def test_harmony_hue_distance_wraps_around_color_wheel():
     engine = ClusterEnsembleEngine()
-    score, name, _ = engine._harmony_fit(
+    score, name, _, _ = engine._harmony_fit(
         (0.6, 0.15, 170.0), np.asarray([[0.5, 0.15, 350.0]]), "vivid",
     )
     assert name == "complementary"
@@ -334,12 +352,12 @@ def test_classical_harmony_score_is_rotation_invariant(mode):
     engine = ClusterEnsembleEngine()
     candidate = (0.62, 0.16, 137.0)
     selected = np.asarray([[0.48, 0.14, 17.0], [0.73, 0.12, 287.0]])
-    score, name, _ = engine._harmony_fit(candidate, selected, mode)
+    score, name, _, _ = engine._harmony_fit(candidate, selected, mode)
     rotation = 83.0
     rotated_candidate = (candidate[0], candidate[1], (candidate[2] + rotation) % 360)
     rotated_selected = selected.copy()
     rotated_selected[:, 2] = (rotated_selected[:, 2] + rotation) % 360
-    rotated_score, rotated_name, _ = engine._harmony_fit(rotated_candidate, rotated_selected, mode)
+    rotated_score, rotated_name, _, _ = engine._harmony_fit(rotated_candidate, rotated_selected, mode)
     assert rotated_score == pytest.approx(score, abs=1e-12)
     assert rotated_name == name
 
@@ -357,12 +375,14 @@ def test_modes_emphasize_different_classical_harmonies():
 
 def test_neutral_colors_use_tonal_harmony_instead_of_unstable_hue():
     engine = ClusterEnsembleEngine()
-    score, name, detail = engine._harmony_fit(
-        (0.72, 0.01, 280.0), np.asarray([[0.45, 0.15, 20.0]]), "balanced",
+    score, name, anchor, detail = engine._harmony_fit(
+        (0.72, 0.01, 280.0), np.asarray([[0.45, 0.15, 20.0]]), "balanced", ("Warm Red",),
     )
     assert name == "tonal"
+    assert anchor == "Warm Red"
     assert 0 < score <= 1
     assert "tonal harmony fit" in detail
+    assert "with Warm Red" in detail
     assert "°" not in detail
 
 
@@ -374,6 +394,18 @@ def test_harmony_diagnostics_publish_targets_and_mode_emphasis(trained_engine):
         "split-complementary", "complementary",
     }
     assert set(diagnostics["modeEmphasis"]) == {"quiet", "balanced", "vivid"}
+    assert diagnostics["minimumResultDistance"] == {"quiet": .035, "balanced": .05, "vivid": .065}
+    assert diagnostics["preferredRecommendationChroma"] == {"quiet": {"maximum": .115}, "vivid": {"minimum": .12}}
+    assert diagnostics["paletteObjectives"] == ["mean chroma", "maximum chroma", "value range", "mean value contrast"]
+    assert diagnostics["harmonyRoleSoftCap"] == 2
+
+
+def test_palette_mode_fit_scores_the_complete_palette():
+    selected = np.asarray([[.55, .06, 20.0]])
+    subdued = np.asarray([[.62, .05, 45.0], [.48, .07, 330.0]])
+    emphatic = np.asarray([[.84, .24, 180.0], [.25, .22, 250.0]])
+    assert ClusterEnsembleEngine._palette_mode_fit(subdued, selected, "quiet") > ClusterEnsembleEngine._palette_mode_fit(emphatic, selected, "quiet")
+    assert ClusterEnsembleEngine._palette_mode_fit(emphatic, selected, "vivid") > ClusterEnsembleEngine._palette_mode_fit(subdued, selected, "vivid")
 
 
 def test_relation_fit_is_bounded(trained_engine):
@@ -438,6 +470,77 @@ def test_wada_calibration_reduces_membership_diffusion(wada_engine):
         memberships > 0, memberships * np.log(memberships), 0,
     ), axis=1)).mean()
     assert effective(calibrated) < effective(uncalibrated) * 0.5
+
+
+def test_historical_wada_pair_grades_above_an_unsupported_pair(wada_engine):
+    dataset = wada_provider.load()
+    colors_by_group: dict[str, list[PaletteColor]] = {}
+    for color in dataset.colors:
+        for group_id in dataset.groups_by_color[color.id]:
+            colors_by_group.setdefault(group_id, []).append(color)
+    historical_pair = next(colors[:2] for colors in colors_by_group.values() if len(colors) >= 2)
+    unsupported_pair = [next(color for color in dataset.colors if color.name == name) for name in ("Etruscan Red", "Salvia Blue")]
+    historical = wada_engine.assess(historical_pair)
+    unsupported = wada_engine.assess(unsupported_pair)
+    assert historical.score > unsupported.score
+    assert any("1 of 1 selected color pairs" in detail for detail in historical.details)
+    assert "0 of 1 selected color pairs" in unsupported.details[0]
+
+
+def test_custom_palette_assessment_reports_projected_support(wada_engine):
+    colors = [
+        PaletteColor("custom:#f11919", "Signal Red", "#f11919", (241, 25, 25)),
+        PaletteColor("custom:#19a1d8", "Clear Blue", "#19a1d8", (25, 161, 216)),
+    ]
+    assessment = wada_engine.assess(colors)
+    assert assessment.grade in {"A", "B", "C", "D", "F"}
+    assert 0 <= assessment.score <= 100
+    assert "projected historical pair support" in assessment.details[0].lower()
+    assert wada_engine.assess(colors) == assessment
+
+
+@pytest.mark.parametrize(("score", "grade"), [(82, "A"), (70, "B"), (57, "C"), (42, "D"), (41, "F")])
+def test_palette_grade_boundaries(score, grade):
+    assert ClusterEnsembleEngine._grade(score)[0] == grade
+
+
+def test_quiet_spectrum_enforces_hard_perceptual_separation(wada_engine):
+    gray = PaletteColor("custom:#808080", "Grey", "#808080", (128, 128, 128))
+    results = wada_engine.recommend([gray], "quiet", 4, "spectrum")
+    labs = np.asarray([rgb_to_oklab(result.color.rgb) for result in results])
+    distances = np.linalg.norm(labs[:, None, :] - labs[None, :, :], axis=2)
+    pair_distances = distances[np.triu_indices(len(results), 1)]
+    assert len(results) == 4
+    assert pair_distances.min() >= wada_engine._MIN_RESULT_DISTANCE["quiet"] - 1e-12
+
+
+def test_archive_modes_shape_the_whole_palette_differently(wada_engine):
+    dataset = wada_provider.load()
+    selected = [next(color for color in dataset.colors if color.name == name) for name in ("Etruscan Red", "Salvia Blue")]
+    palettes = {
+        mode: wada_engine.recommend(selected, mode, 4, "palette")
+        for mode in ("quiet", "balanced", "vivid")
+    }
+    quiet_chroma = np.mean([rgb_to_oklch(result.color.rgb)[1] for result in palettes["quiet"]])
+    vivid_chroma = np.mean([rgb_to_oklch(result.color.rgb)[1] for result in palettes["vivid"]])
+    balanced_ids = {result.color.id for result in palettes["balanced"]}
+    vivid_ids = {result.color.id for result in palettes["vivid"]}
+    assert quiet_chroma < vivid_chroma
+    assert len(balanced_ids & vivid_ids) <= 2
+
+
+def test_balanced_archive_palette_diversifies_harmony_roles_and_names_anchors(wada_engine):
+    dataset = wada_provider.load()
+    selected_names = ("Etruscan Red", "Salvia Blue")
+    selected = [next(color for color in dataset.colors if color.name == name) for name in selected_names]
+    results = wada_engine.recommend(selected, "balanced", 4, "palette")
+    harmony_names = [name for name, _, _ in wada_engine._HARMONY_SCHEMES] + ["tonal"]
+    roles = [
+        next(name for name in harmony_names if name.replace("-", " ") in result.evidence_details[0])
+        for result in results
+    ]
+    assert max(roles.count(role) for role in set(roles)) <= 2
+    assert all(any(f"to {name}" in result.evidence_details[0] for name in selected_names) for result in results)
 
 
 def test_known_color_has_one_exact_anchor(trained_engine):

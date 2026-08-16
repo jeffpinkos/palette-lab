@@ -1,13 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { Recommendation } from '../domain/palette'
-import { cssPalette, fitLabel, Results } from './Results'
+import { cssPalette, evidenceSummary, fitLabel, Results } from './Results'
 
 const results: Recommendation[] = [
   {
     color: { id: 'generated:#123456', name: 'Spectrum Azure', hex: '#123456', rgb: [18, 52, 86], metadata: { generated: true } },
     score: .72,
-    evidence: { label: 'shared Wada groups', value: 3, details: ['triadic interval · 120° · ΔL 24', 'Generated in perceptual OKLCH space'] },
+    evidence: { label: 'related Wada groups', value: 3, details: ['82% classical harmony fit · triadic to Salvia Blue at 120° · ΔL 24', '91% model rank agreement · 73% historic support fit', 'Projected through Wada anchors: Sky Blue, Sea Green'] },
   },
   { color: { id: 'archive', name: 'Archive green', hex: '#abcdef', rgb: [171, 205, 239] }, score: .41 },
 ]
@@ -16,8 +16,9 @@ describe('Results', () => {
   it('renders generated provenance and artist-facing evidence', () => {
     const html = renderToStaticMarkup(<Results results={results} onAdd={vi.fn()} />)
     expect(html).toContain('Generated')
-    expect(html).toContain('3 shared Wada groups')
-    expect(html).toContain('triadic interval')
+    expect(html).toContain('Projected through 3 related Wada groups')
+    expect(html).toContain('triadic to Salvia Blue')
+    expect(html).toContain('Wada anchors: Sky Blue, Sea Green')
     expect(html).toContain('Strong fit')
   })
   it('exposes add, copy, and export actions', () => {
@@ -26,6 +27,13 @@ describe('Results', () => {
     expect(html).toContain('Copy #123456')
     expect(html).toContain('Copy CSS')
     expect(html).toContain('Export')
+  })
+})
+
+describe('evidenceSummary', () => {
+  it('distinguishes generated projection from historical membership', () => {
+    expect(evidenceSummary(results[0])).toBe('Projected through 3 related Wada groups')
+    expect(evidenceSummary({ ...results[0], color: { ...results[0].color, metadata: undefined }, evidence: { label: 'shared Wada groups', value: 3 } })).toBe('3 shared Wada groups')
   })
 })
 

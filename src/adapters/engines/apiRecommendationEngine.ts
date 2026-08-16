@@ -1,5 +1,5 @@
 import type { RecommendationEngine } from '../../contracts/recommendationEngine'
-import type { Recommendation, RecommendationRequest } from '../../domain/palette'
+import type { PaletteAssessment, PaletteAssessmentRequest, Recommendation, RecommendationRequest } from '../../domain/palette'
 
 type ApiRecommendation = { color: Recommendation['color']; score: number; evidence?: Recommendation['evidence'] }
 
@@ -28,5 +28,20 @@ export class ApiRecommendationEngine implements RecommendationEngine {
     if (!response.ok) throw new Error(`Recommendation service failed (${response.status})`)
     const payload = await response.json() as { recommendations: ApiRecommendation[] }
     return payload.recommendations
+  }
+
+  async assess(request: PaletteAssessmentRequest): Promise<PaletteAssessment | null> {
+    const response = await fetch(`${this.baseUrl}/assess`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        palette_id: request.dataset.metadata.id,
+        engine_id: this.id,
+        colors: request.selectedColors.map(({ id, name, hex, rgb }) => ({ id, name, hex, rgb })),
+      }),
+    })
+    if (!response.ok) throw new Error(`Palette assessment failed (${response.status})`)
+    const payload = await response.json() as { assessment: PaletteAssessment | null }
+    return payload.assessment
   }
 }

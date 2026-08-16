@@ -13,6 +13,7 @@ const request: RecommendationRequest = {
   ], mode: 'vivid', scope: 'spectrum', limit: 6,
 }
 const recommendation = { color: { id: 'green', name: 'Green', hex: '#00ff00', rgb: [0, 255, 0] }, score: .88, evidence: { label: 'neighbors', value: 12 } }
+const assessment = { grade: 'B', score: 74, label: 'Strong Wada affinity', summary: 'Well supported.', details: ['Historic evidence'] }
 const response = (body: unknown, ok = true, status = 200) => ({ ok, status, json: vi.fn().mockResolvedValue(body) })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -60,5 +61,25 @@ describe('ApiRecommendationEngine', () => {
   it('propagates network failures', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection lost')))
     await expect(new ApiRecommendationEngine().recommend(request)).rejects.toThrow('connection lost')
+  })
+
+  it('requests a palette-level assessment without mode or result scope', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({ assessment }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(new ApiRecommendationEngine('/ml', 'embedding-v2').assess({ dataset: request.dataset, selectedColors: request.selectedColors })).resolves.toEqual(assessment)
+    expect(fetchMock).toHaveBeenCalledWith('/ml/assess', expect.objectContaining({ method: 'POST' }))
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      palette_id: 'palette-x', engine_id: 'embedding-v2', colors: [
+        { id: 'red', name: 'Red', hex: '#ff0000', rgb: [255, 0, 0] },
+        { id: 'custom:#123456', name: 'Custom color', hex: '#123456', rgb: [18, 52, 86] },
+      ],
+    })
+  })
+
+  it('supports unavailable and failed palette assessments', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ assessment: null })))
+    await expect(new ApiRecommendationEngine().assess({ dataset: request.dataset, selectedColors: request.selectedColors })).resolves.toBeNull()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({}, false, 503)))
+    await expect(new ApiRecommendationEngine().assess({ dataset: request.dataset, selectedColors: request.selectedColors })).rejects.toThrow('Palette assessment failed (503)')
   })
 })

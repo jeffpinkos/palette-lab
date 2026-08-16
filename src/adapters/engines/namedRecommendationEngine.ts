@@ -1,6 +1,6 @@
 import type { ColorNamer } from '../../contracts/colorNamer'
 import type { RecommendationEngine } from '../../contracts/recommendationEngine'
-import type { RecommendationRequest } from '../../domain/palette'
+import type { PaletteAssessmentRequest, RecommendationRequest } from '../../domain/palette'
 
 /** Decorates generated recommendations with friendly names while preserving source-palette labels. */
 export class NamedRecommendationEngine implements RecommendationEngine {
@@ -18,5 +18,9 @@ export class NamedRecommendationEngine implements RecommendationEngine {
       ...recommendation,
       color: await this.namer.name(recommendation.color),
     })))
+  }
+
+  async assess(request: PaletteAssessmentRequest) {
+    return this.engine.assess ? this.engine.assess(request) : null
   }
 }

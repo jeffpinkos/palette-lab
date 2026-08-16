@@ -46,15 +46,20 @@ The backend includes `cluster-ensemble-v2`, an optimized model-selection pipelin
 6. Learns support and contrast relationship archetypes from unique historical color pairs and includes their empirical mixture likelihood in every recommendation score.
 7. Scores explicit OKLCH color-wheel harmonies—monochromatic, analogous, tetradic, triadic, split-complementary, and complementary—with mode-sensitive emphasis and tonal handling for neutrals.
 8. Projects arbitrary colors through an adaptive four-neighbor Gaussian kernel and compares calibrated cluster, TF-IDF group, feature-centroid, historical-relation, classical-harmony, and perceptual-mood vectors.
-9. Uses a greedy determinantal point process objective to avoid redundant suggestions, plus hue-preserving OKLCH gamut mapping for generated colors.
+9. Reranks the complete palette against mode-specific mean/maximum chroma, value-range, and contrast objectives; rewards harmony-role and selected-anchor variety; and applies a hard, mode-specific OKLab separation floor after determinantal diversity scoring.
+10. Uses hue-preserving OKLCH gamut mapping for generated colors and labels their historical evidence as anchor projection rather than direct Wada membership.
 
-Recommendation evidence includes historic overlap, hue interval and lightness contrast, cross-model rank agreement, support/contrast fit, custom-input anchor names, and generated-color provenance. Model diagnostics expose the calibrated family ensemble, learned relation mixture, and recommendation score weights. The interface can add a suggestion back into the composition, copy individual hex values or the complete CSS palette, and export a CSS file.
+Recommendation evidence includes historic overlap, hue interval and lightness contrast, the selected color that anchors each harmony, cross-model rank agreement, support/contrast fit, custom-input anchor names, and generated-color projection anchors. Model diagnostics expose the calibrated family ensemble, learned relation mixture, palette-level objectives, separation floors, and recommendation score weights. The interface can add a suggestion back into the composition, copy individual hex values or the complete CSS palette, and export a CSS file.
+
+The selected palette also receives an A–F Wada grade that is independent of creative direction and result source. It combines projected pairwise archive support, cluster-ensemble structure, the learned historical relationship mixture, classical harmony, and projection fidelity. The grade measures affinity to the Wada corpus—not universal artistic quality—and includes the evidence behind the score.
 
 Training is deterministic through a fixed random seed. Inspect the full candidate leaderboard and selected model at:
 
 ```text
 GET /api/models/wada-1933/cluster-ensemble-v2
 ```
+
+Palette assessment is available separately from recommendation generation at `POST /api/assess`, so another palette or model can provide its own grading strategy without changing the UI.
 
 ## Run
 

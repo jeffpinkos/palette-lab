@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .contracts import PaletteProvider, RecommendationEngine
-from .domain import PaletteColor, PaletteDataset, Recommendation
+from .domain import PaletteAssessment, PaletteColor, PaletteDataset, Recommendation
 
 
 class RecommendationService:
@@ -41,6 +41,11 @@ class RecommendationService:
     def recommend(self, palette_id: str, engine_id: str, selected_colors: list[PaletteColor], mode: str, limit: int, scope: str = "palette") -> list[Recommendation]:
         self.dataset(palette_id)
         return self._engine(palette_id, engine_id).recommend(selected_colors, mode, limit, scope)
+
+    def assess(self, palette_id: str, engine_id: str, selected_colors: list[PaletteColor]) -> PaletteAssessment | None:
+        self.dataset(palette_id)
+        assessor = getattr(self._engine(palette_id, engine_id), "assess", None)
+        return assessor(selected_colors) if assessor else None
 
     def diagnostics(self, palette_id: str, engine_id: str) -> dict:
         engine = self._engine(palette_id, engine_id)
