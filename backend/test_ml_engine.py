@@ -1,5 +1,6 @@
 import json
 
+import numpy as np
 import pytest
 
 pytest.importorskip("sklearn")
@@ -58,7 +59,7 @@ def test_evaluates_each_requested_cluster_count(trained_engine):
 
 def test_reports_all_three_quality_metrics(trained_engine):
     candidate = trained_engine.diagnostics()["candidates"][0]
-    assert {"silhouette", "calinski_harabasz", "davies_bouldin", "group_recall_at_10", "composite"}.issubset(candidate)
+    assert {"silhouette", "calinski_harabasz", "davies_bouldin", "group_recall_at_10", "group_ndcg_at_10", "composite"}.issubset(candidate)
 
 
 def test_selected_model_is_top_composite(trained_engine):
@@ -67,7 +68,7 @@ def test_selected_model_is_top_composite(trained_engine):
 
 
 def test_diagnostics_are_json_serializable(trained_engine):
-    assert json.loads(json.dumps(trained_engine.diagnostics()))["engine"]["id"] == "cluster-ensemble-v1"
+    assert json.loads(json.dumps(trained_engine.diagnostics()))["engine"]["id"] == "cluster-ensemble-v2"
 
 
 def test_training_shape_is_reported(trained_engine):
@@ -78,6 +79,9 @@ def test_training_shape_is_reported(trained_engine):
     assert training["randomState"] == 7
     assert training["colorSpace"] == "OKLab / OKLCH"
     assert "holdout" in training["validation"]
+    assert "TF-IDF" in training["featureDesign"]
+    assert "four-neighbor" in training["anchorProjection"]
+    assert "determinantal" in training["paletteSelection"]
 
 
 def test_training_is_reproducible():
@@ -133,6 +137,7 @@ def test_spectrum_scope_generates_continuous_colors(trained_engine):
     assert len(results) == 4
     assert all(result.color.id.startswith("generated:") for result in results)
     assert all(result.color.metadata["generated"] is True for result in results)
+    assert all(result.color.metadata["gamutMapped"] is True for result in results)
     assert all("OKLCH" in result.evidence_details[-1] for result in results)
 
 
@@ -144,7 +149,9 @@ def test_modes_create_distinct_spectrum_directions(trained_engine):
 
 def test_diagnostics_weights_include_harmony_retrieval(trained_engine):
     weights = trained_engine.diagnostics()["metricWeights"]
-    assert weights["groupRecallAt10"] == .40
+    assert weights["groupRecallAt10"] == .30
+    assert weights["groupNdcgAt10"] == .25
+    assert weights["parsimony"] == .05
     assert sum(weights.values()) == pytest.approx(1)
 
 
@@ -155,9 +162,54 @@ def test_rgb_only_palette_can_train():
     assert engine.diagnostics()["training"]["features"] == 3
 
 
-def test_static_normalization_handles_ties():
-    assert ClusterEnsembleEngine._normalized([4.0, 4.0]) == [0.5, 0.5]
+def test_percentile_ranks_handle_ties():
+    assert ClusterEnsembleEngine._percentile_ranks([4.0, 4.0]) == [0.5, 0.5]
 
 
-def test_static_normalization_can_invert_lower_is_better():
-    assert ClusterEnsembleEngine._normalized([1.0, 3.0], lower_is_better=True) == [1.0, 0.0]
+def test_percentile_ranks_can_invert_lower_is_better():
+    assert ClusterEnsembleEngine._percentile_ranks([1.0, 3.0], lower_is_better=True) == [1.0, 0.0]
+
+
+def test_percentile_ranks_are_not_distorted_by_outlier_magnitude():
+    assert ClusterEnsembleEngine._percentile_ranks([1.0, 2.0, 1_000_000.0]) == [0.0, 0.5, 1.0]
+
+
+def test_soft_cluster_memberships_are_probability_vectors(trained_engine):
+    memberships = trained_engine._cluster_memberships
+    assert memberships.shape == (12, trained_engine.diagnostics()["selected"]["clusters"])
+    assert (memberships >= 0).all()
+    assert (memberships <= 1).all()
+    assert memberships.sum(axis=1) == pytest.approx([1.0] * 12)
+
+
+def test_known_color_has_one_exact_anchor(trained_engine):
+    color = clustered_dataset().colors[0]
+    assert trained_engine._anchor_weights(color) == [(color, 1.0)]
+
+
+def test_custom_color_uses_normalized_four_neighbor_kernel(trained_engine):
+    custom = PaletteColor("custom", "Custom", "#999999", (153, 153, 153))
+    anchors = trained_engine._anchor_weights(custom)
+    assert len(anchors) == 4
+    assert sum(weight for _, weight in anchors) == pytest.approx(1)
+    assert all(weight > 0 for _, weight in anchors)
+
+
+def test_exact_rgb_custom_color_collapses_to_exact_palette_anchor(trained_engine):
+    source = clustered_dataset().colors[0]
+    custom = PaletteColor("custom", "Custom", source.hex, source.rgb)
+    assert trained_engine._anchor_weights(custom) == [(source, 1.0)]
+
+
+def test_rbf_diversity_kernel_is_symmetric_positive_semidefinite():
+    labs = np.asarray([[0.5, 0.1, 0], [0.5, 0.1, 0], [0.8, -0.1, .1]])
+    kernel = ClusterEnsembleEngine._rbf_kernel(labs, .1)
+    assert kernel == pytest.approx(kernel.T)
+    assert np.linalg.eigvalsh(kernel).min() >= -1e-10
+
+
+def test_recommendations_are_deterministic(trained_engine):
+    selected = [clustered_dataset().colors[0]]
+    left = [item.color.id for item in trained_engine.recommend(selected, "balanced", 4)]
+    right = [item.color.id for item in trained_engine.recommend(selected, "balanced", 4)]
+    assert left == right

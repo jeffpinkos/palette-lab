@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": "^20.0.0 || >=22.0.0" },
+  "engines": {
+    "node": "^20.0.0 || >=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "dev:api": ".venv/bin/python -m uvicorn backend.app:app --reload",
@@ -16,11 +18,12 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",
-    "vite": "6.0.7",
-    "typescript": "5.7.3",
+    "color-name-list": "14.47.0",
+    "lucide-react": "0.468.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "lucide-react": "0.468.0"
+    "typescript": "5.7.3",
+    "vite": "6.0.7"
   },
   "devDependencies": {
     "@types/react": "19.0.3",

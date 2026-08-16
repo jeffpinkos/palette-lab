@@ -31,8 +31,8 @@ export default function App() {
     <div id="lab" className="workspace">
       <section className="composer">
         <div className="intro"><h1>Find colors that<br />belong together.</h1><p>{metadata.description}</p></div>
-        <ColorSearch colors={palette.colors} selected={lab.selected} paletteName={metadata.name} maxSelections={runtime.maxSelections} onAdd={lab.addColor} onRemove={lab.removeColor} />
-        <button className="primary" disabled={!lab.selected.length || lab.status === 'recommending'} onClick={() => void lab.generate()}>{lab.status === 'recommending' ? 'Finding harmonies…' : 'Find harmonies'} <ArrowRight size={19} /></button>
+        <ColorSearch colors={palette.colors} selected={lab.selected} maxSelections={runtime.maxSelections} colorNameCount={runtime.colorNamer.count} isNaming={lab.isNaming} searchColorNames={lab.searchColorNames} onAdd={lab.addColor} onRemove={lab.removeColor} />
+        <button className="primary" disabled={!lab.selected.length || lab.status === 'recommending' || lab.isNaming} onClick={() => void lab.generate()}>{lab.isNaming ? 'Naming color…' : lab.status === 'recommending' ? 'Finding harmonies…' : 'Find harmonies'} <ArrowRight size={19} /></button>
         <fieldset className="modes"><legend>Creative direction</legend>{MODES.map((item) => <button key={item} aria-pressed={lab.mode === item} className={lab.mode === item ? 'selected' : ''} onClick={() => lab.setMode(item)}>{item}<i /></button>)}</fieldset>
         <p className="mode-note">{MODE_COPY[lab.mode]}</p>
         <fieldset className="scopes"><legend>Result source</legend>{SCOPES.map((item) => <button key={item.value} aria-pressed={lab.scope === item.value} className={lab.scope === item.value ? 'selected' : ''} onClick={() => lab.setScope(item.value)}>{item.label}</button>)}</fieldset>
@@ -46,6 +46,6 @@ export default function App() {
       <div className="method-visual"><div className="mini selected-mini">{lab.selected.slice(0, 3).map((color) => <i key={color.id} style={{ background: color.hex }} />)}</div><b>+</b><div className="mini">{lab.results.slice(0, 4).map((result) => <i key={result.color.id} style={{ background: result.color.hex }} />)}</div></div>
       <aside><CircleHelp size={18} /><p>{runtime.recommendationEngine.name} reports relative fit, not probability. Each result notes its hue interval, historic overlap, and custom-color anchors.</p></aside>
     </section>
-    <footer className="footer"><span className="mark">⊕</span><span>Based on <b>{palette.colors.length}</b> colors and <b>{palette.groupCount}</b> {metadata.groupLabel}</span><span>{metadata.attribution}</span></footer>
+    <footer className="footer"><span className="mark">⊕</span><span>Based on <b>{palette.colors.length}</b> colors and <b>{palette.groupCount}</b> {metadata.groupLabel}</span><span>{runtime.colorNamer.count.toLocaleString()} Color Name List names · {metadata.attribution}</span></footer>
   </main>
 }

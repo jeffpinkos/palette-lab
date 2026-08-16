@@ -31,5 +31,5 @@ def cluster_ensemble_factory():
 
 ENGINE_FACTORIES = {
     GroupCooccurrenceEngine.id: GroupCooccurrenceEngine,
-    "cluster-ensemble-v1": cluster_ensemble_factory,
+    "cluster-ensemble-v2": cluster_ensemble_factory,
 }

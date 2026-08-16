@@ -2,16 +2,17 @@
 
 A decoupled React + TypeScript color laboratory with pluggable palette providers and recommendation engines. The included Wada configuration is grounded in the 157 colors and 348 historic combinations from the [Sanzo Wada dataset](https://sanzo-wada.dmbk.io/assets/colors.json).
 
-Users may enter or pick any six-digit color. Exact custom values remain in the composition while the ML engine interpolates three nearby training anchors. Results can stay inside the source archive or explore generated OKLCH colors across the full spectrum.
+Users may search 31,914 curated color names or enter and pick any six-digit color. Exact custom values remain in the composition, receive the closest perceptual name from the MIT-licensed [Color Name List](https://www.npmjs.com/package/color-name-list), and let the ML engine interpolate four nearby training anchors. Results can stay inside the source archive or explore named, generated OKLCH colors across the full spectrum.
 
 ## Architecture
 
 ```text
-source data -> PaletteProvider -> PaletteDataset -> RecommendationEngine -> React UI
+source data -> PaletteProvider -> PaletteDataset -> RecommendationEngine -> ColorNamer -> React UI
 ```
 
 - `src/domain/` contains source- and model-independent types.
 - `src/contracts/` defines the provider and engine ports.
+- `ColorNamer` is a separate port, so other name catalogs can replace the bundled full list without changing palette or ML code.
 - `src/adapters/palettes/` normalizes individual palette sources.
 - `src/adapters/engines/` contains local and remote inference adapters.
 - `src/config/runtime.ts` is the frontend composition root.
@@ -35,21 +36,21 @@ Implement `RecommendationEngine`. The frontend engine receives a normalized data
 
 ## Evaluated clustering engine
 
-The backend includes `cluster-ensemble-v1`, an actual model-selection pipeline that:
+The backend includes `cluster-ensemble-v2`, an optimized model-selection pipeline that:
 
-1. Builds a standardized feature matrix from perceptual OKLab values and a Truncated SVD embedding of palette group/co-occurrence signals.
-2. Trains K-means, Ward agglomerative clustering, and diagonal-covariance Gaussian mixtures across several cluster counts.
-3. Holds out a deterministic 20% of palette groups and measures group retrieval at 10 alongside silhouette, Calinski–Harabasz, and Davies–Bouldin scores.
-4. Normalizes those metrics into a weighted composite and retains the best candidate.
-5. Blends learned cluster membership, historical co-occurrence, perceptual proximity, and explicit Quiet/Balanced/Vivid OKLCH objectives.
-6. Reranks the final set for palette-level diversity so individually strong but redundant colors do not dominate.
+1. Builds a block-normalized feature matrix from perceptual OKLab values and an eight-dimensional SVD of L2-normalized TF-IDF historical-group vectors.
+2. Trains optimized K-means, Ward agglomerative clustering, and regularized diagonal-covariance Gaussian mixtures across several cluster counts.
+3. Holds out a seeded 20% of palette groups and measures recall and NDCG at 10 alongside silhouette, Calinski–Harabasz, and Davies–Bouldin scores.
+4. Combines outlier-resistant percentile ranks with a small parsimony term to select the best model without over-rewarding excess clusters.
+5. Projects arbitrary colors through an adaptive four-neighbor Gaussian kernel and compares soft cluster, TF-IDF group, and feature-centroid vectors.
+6. Uses a greedy determinantal point process objective to avoid redundant suggestions, plus hue-preserving OKLCH gamut mapping for generated colors.
 
 Recommendation evidence includes historic overlap, hue interval and lightness contrast, custom-input anchor names, and generated-color provenance. The interface can add a suggestion back into the composition, copy individual hex values or the complete CSS palette, and export a CSS file.
 
 Training is deterministic through a fixed random seed. Inspect the full candidate leaderboard and selected model at:
 
 ```text
-GET /api/models/wada-1933/cluster-ensemble-v1
+GET /api/models/wada-1933/cluster-ensemble-v2
 ```
 
 ## Run
@@ -59,7 +60,7 @@ npm install
 npm run dev
 ```
 
-Run the ML API in a second terminal with `npm run dev:api`. The frontend is configured to use `cluster-ensemble-v1` through Vite's `/api` proxy.
+Run the ML API in a second terminal with `npm run dev:api`. The frontend is configured to use `cluster-ensemble-v2` through Vite's `/api` proxy.
 
 ```bash
 python3.12 -m venv .venv
@@ -75,7 +76,7 @@ The generic API request is:
 ```json
 {
   "palette_id": "wada-1933",
-  "engine_id": "cluster-ensemble-v1",
+  "engine_id": "cluster-ensemble-v2",
   "colors": [
     { "id": "custom:#12abef", "name": "Custom color", "hex": "#12abef", "rgb": [18, 171, 239] }
   ],
@@ -93,4 +94,4 @@ npm run build
 python -m pytest backend/test_architecture.py
 ```
 
-Run all 165 unit cases together with `npm run test:all`; use `npm run test:watch` while developing TypeScript modules.
+Run all 201 unit cases together with `npm run test:all`; use `npm run test:watch` while developing TypeScript modules.

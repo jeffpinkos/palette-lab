@@ -31,7 +31,7 @@ def _srgb_channel(channel: float) -> int:
     return round(max(0.0, min(1.0, value)) * 255)
 
 
-def oklch_to_rgb(lightness: float, chroma: float, hue: float) -> tuple[int, int, int]:
+def _oklch_to_linear_rgb(lightness: float, chroma: float, hue: float) -> tuple[float, float, float]:
     radians = math.radians(hue)
     a, b = chroma * math.cos(radians), chroma * math.sin(radians)
     l_root = lightness + 0.3963377774 * a + 0.2158037573 * b
@@ -39,10 +39,35 @@ def oklch_to_rgb(lightness: float, chroma: float, hue: float) -> tuple[int, int,
     s_root = lightness - 0.0894841775 * a - 1.2914855480 * b
     l, m, s = l_root ** 3, m_root ** 3, s_root ** 3
     return (
-        _srgb_channel(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-        _srgb_channel(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-        _srgb_channel(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s),
+        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
     )
+
+
+def oklch_to_rgb(lightness: float, chroma: float, hue: float) -> tuple[int, int, int]:
+    """Convert OKLCH to clipped sRGB, preserving exact in-gamut round trips."""
+    return tuple(_srgb_channel(channel) for channel in _oklch_to_linear_rgb(lightness, chroma, hue))
+
+
+def oklch_to_gamut_mapped_rgb(lightness: float, chroma: float, hue: float, iterations: int = 18) -> tuple[int, int, int]:
+    """Map an OKLCH color into sRGB by reducing chroma while preserving L and hue.
+
+    Channel clipping changes hue unpredictably. A monotone binary search along the
+    constant-lightness, constant-hue ray instead finds the highest in-gamut chroma.
+    """
+    channels = _oklch_to_linear_rgb(lightness, chroma, hue)
+    if all(0.0 <= channel <= 1.0 for channel in channels):
+        return tuple(_srgb_channel(channel) for channel in channels)
+    low, high = 0.0, max(0.0, chroma)
+    for _ in range(max(1, iterations)):
+        midpoint = (low + high) / 2
+        candidate = _oklch_to_linear_rgb(lightness, midpoint, hue)
+        if all(0.0 <= channel <= 1.0 for channel in candidate):
+            low = midpoint
+        else:
+            high = midpoint
+    return tuple(_srgb_channel(channel) for channel in _oklch_to_linear_rgb(lightness, low, hue))
 
 
 def perceptual_distance(left: tuple[int, int, int], right: tuple[int, int, int]) -> float:

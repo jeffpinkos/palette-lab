@@ -10,11 +10,11 @@ const colors: PaletteColor[] = [
   { id: 'd', name: 'Archive gold', hex: '#ddaa22', rgb: [221, 170, 34] },
 ]
 
-const render = (selected: PaletteColor[] = []) => renderToStaticMarkup(<ColorSearch colors={colors} selected={selected} paletteName="Archive" maxSelections={4} onAdd={vi.fn()} onRemove={vi.fn()} />)
+const render = (selected: PaletteColor[] = [], isNaming = false) => renderToStaticMarkup(<ColorSearch colors={colors} selected={selected} maxSelections={4} colorNameCount={31_914} isNaming={isNaming} searchColorNames={vi.fn().mockResolvedValue([])} onAdd={vi.fn()} onRemove={vi.fn()} />)
 
 describe('ColorSearch', () => {
   it('describes arbitrary hex support before an error occurs', () => {
-    expect(render()).toContain('Use any six-digit hex color—not only colors in the archive.')
+    expect(render()).toContain('The closest of 31,914 names is applied automatically.')
   })
   it('publishes combobox state for assistive technology', () => {
     expect(render()).toContain('role="combobox"')
@@ -27,5 +27,12 @@ describe('ColorSearch', () => {
   })
   it('renders removal controls with color-specific labels', () => {
     expect(render([colors[0]])).toContain('Remove Archive red')
+  })
+  it('advertises the complete searchable color-name catalog', () => {
+    expect(render()).toContain('Search 31,914 color names')
+    expect(render()).toContain('Search colors by name or hex')
+  })
+  it('shows when an arbitrary color is being named', () => {
+    expect(render([], true)).toContain('Naming color…')
   })
 })

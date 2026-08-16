@@ -8,12 +8,14 @@ export function usePaletteLab(runtime: LabRuntime) {
   const [mode, setModeState] = useState<HarmonyMode>('balanced')
   const [scope, setScopeState] = useState<RecommendationScope>('palette')
   const [results, setResults] = useState<Recommendation[]>([])
+  const [namingCount, setNamingCount] = useState(0)
   const [status, setStatus] = useState<'loading' | 'ready' | 'recommending' | 'error'>('loading')
   const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
 
   useEffect(() => {
     let active = true
+    void runtime.colorNamer.prepare().catch(() => undefined)
     runtime.paletteProvider.load().then((loaded) => {
       if (!active) return
       setDataset(loaded)
@@ -53,11 +55,19 @@ export function usePaletteLab(runtime: LabRuntime) {
     setStatus('ready')
   }, [])
 
-  const addColor = useCallback((color: PaletteColor) => {
-    if (selected.length >= runtime.maxSelections || selected.some((item) => item.id === color.id)) return
-    setSelected([...selected, color])
+  const addColor = useCallback(async (color: PaletteColor) => {
+    if (selected.length >= runtime.maxSelections || selected.some((item) => item.id === color.id || item.hex === color.hex)) return
     invalidateResults()
-  }, [invalidateResults, runtime.maxSelections, selected])
+    setNamingCount((count) => count + 1)
+    try {
+      const namedColor = await runtime.colorNamer.name(color).catch(() => color)
+      setSelected((current) => current.length >= runtime.maxSelections || current.some((item) => item.id === namedColor.id || item.hex === namedColor.hex)
+        ? current
+        : [...current, namedColor])
+    } finally {
+      setNamingCount((count) => Math.max(0, count - 1))
+    }
+  }, [invalidateResults, runtime.colorNamer, runtime.maxSelections, selected])
 
   const removeColor = useCallback((id: ColorId) => {
     if (!selected.some((color) => color.id === id)) return
@@ -73,5 +83,7 @@ export function usePaletteLab(runtime: LabRuntime) {
     if (results.length > 0) void generate(mode, nextScope)
   }, [generate, mode, results.length])
 
-  return { dataset, selected, mode, scope, results, status, error, addColor, removeColor, setMode, setScope, generate }
+  const searchColorNames = useCallback((query: string, limit?: number) => runtime.colorNamer.search(query, limit), [runtime.colorNamer])
+
+  return { dataset, selected, mode, scope, results, status, error, isNaming: namingCount > 0, addColor, removeColor, setMode, setScope, generate, searchColorNames }
 }
