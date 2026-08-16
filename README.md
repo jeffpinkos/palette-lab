@@ -2,7 +2,7 @@
 
 A decoupled React + TypeScript color laboratory with pluggable palette providers and recommendation engines. The included Wada configuration is grounded in the 157 colors and 348 historic combinations from the [Sanzo Wada dataset](https://sanzo-wada.dmbk.io/assets/colors.json).
 
-Users may enter or pick any six-digit color. Exact custom RGB values remain in the composition while recommendation engines use the active palette only as a source of learned harmony signals.
+Users may enter or pick any six-digit color. Exact custom values remain in the composition while the ML engine interpolates three nearby training anchors. Results can stay inside the source archive or explore generated OKLCH colors across the full spectrum.
 
 ## Architecture
 
@@ -37,11 +37,14 @@ Implement `RecommendationEngine`. The frontend engine receives a normalized data
 
 The backend includes `cluster-ensemble-v1`, an actual model-selection pipeline that:
 
-1. Builds a standardized feature matrix from RGB values and a Truncated SVD embedding of palette group/co-occurrence signals.
+1. Builds a standardized feature matrix from perceptual OKLab values and a Truncated SVD embedding of palette group/co-occurrence signals.
 2. Trains K-means, Ward agglomerative clustering, and diagonal-covariance Gaussian mixtures across several cluster counts.
-3. Evaluates every candidate with silhouette, Calinski–Harabasz, and Davies–Bouldin scores.
+3. Holds out a deterministic 20% of palette groups and measures group retrieval at 10 alongside silhouette, Calinski–Harabasz, and Davies–Bouldin scores.
 4. Normalizes those metrics into a weighted composite and retains the best candidate.
-5. Blends learned cluster membership, historical co-occurrence, feature proximity, and the selected color mood when ranking recommendations.
+5. Blends learned cluster membership, historical co-occurrence, perceptual proximity, and explicit Quiet/Balanced/Vivid OKLCH objectives.
+6. Reranks the final set for palette-level diversity so individually strong but redundant colors do not dominate.
+
+Recommendation evidence includes historic overlap, hue interval and lightness contrast, custom-input anchor names, and generated-color provenance. The interface can add a suggestion back into the composition, copy individual hex values or the complete CSS palette, and export a CSS file.
 
 Training is deterministic through a fixed random seed. Inspect the full candidate leaderboard and selected model at:
 
@@ -72,11 +75,12 @@ The generic API request is:
 ```json
 {
   "palette_id": "wada-1933",
-  "engine_id": "group-cooccurrence-v1",
+  "engine_id": "cluster-ensemble-v1",
   "colors": [
     { "id": "custom:#12abef", "name": "Custom color", "hex": "#12abef", "rgb": [18, 171, 239] }
   ],
   "mode": "balanced",
+  "scope": "spectrum",
   "limit": 4
 }
 ```
@@ -89,4 +93,4 @@ npm run build
 python -m pytest backend/test_architecture.py
 ```
 
-Run all 133 unit cases together with `npm run test:all`; use `npm run test:watch` while developing TypeScript modules.
+Run all 165 unit cases together with `npm run test:all`; use `npm run test:watch` while developing TypeScript modules.

@@ -25,6 +25,7 @@ class HarmonyRequest(BaseModel):
     engine_id: str
     colors: list[ColorInput] = Field(min_length=1, max_length=4)
     mode: Literal["quiet", "balanced", "vivid"] = "balanced"
+    scope: Literal["palette", "spectrum"] = "palette"
     limit: int = Field(default=4, ge=1, le=12)
 
 
@@ -50,7 +51,7 @@ def model_diagnostics(palette_id: str, engine_id: str):
 def recommend(request: HarmonyRequest):
     try:
         selected = [PaletteColor(color.id, color.name, color.hex.lower(), color.rgb, {"custom": color.id.startswith("custom:")}) for color in request.colors]
-        recommendations = service.recommend(request.palette_id, request.engine_id, selected, request.mode, request.limit)
+        recommendations = service.recommend(request.palette_id, request.engine_id, selected, request.mode, request.limit, request.scope)
     except (KeyError, ValueError) as error:
         raise HTTPException(400, str(error)) from error
     return {"recommendations": [recommendation.as_dict() for recommendation in recommendations]}

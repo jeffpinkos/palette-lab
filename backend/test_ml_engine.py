@@ -58,7 +58,7 @@ def test_evaluates_each_requested_cluster_count(trained_engine):
 
 def test_reports_all_three_quality_metrics(trained_engine):
     candidate = trained_engine.diagnostics()["candidates"][0]
-    assert {"silhouette", "calinski_harabasz", "davies_bouldin", "composite"}.issubset(candidate)
+    assert {"silhouette", "calinski_harabasz", "davies_bouldin", "group_recall_at_10", "composite"}.issubset(candidate)
 
 
 def test_selected_model_is_top_composite(trained_engine):
@@ -76,6 +76,8 @@ def test_training_shape_is_reported(trained_engine):
     assert training["groups"] == 5
     assert training["features"] > 3
     assert training["randomState"] == 7
+    assert training["colorSpace"] == "OKLab / OKLCH"
+    assert "holdout" in training["validation"]
 
 
 def test_training_is_reproducible():
@@ -113,10 +115,37 @@ def test_all_modes_produce_finite_scores(trained_engine, mode):
     assert all(0 < result.score <= 1 for result in results)
 
 
-def test_evidence_exposes_cluster_membership(trained_engine):
+def test_evidence_exposes_artist_facing_reasons(trained_engine):
     results = trained_engine.recommend([clustered_dataset().colors[0]], "balanced", 4)
-    assert all(result.evidence_label == "cluster match" for result in results)
-    assert all(result.evidence_value in (0, 1) for result in results)
+    assert all(result.evidence_label in {"shared Wada group", "shared Wada groups", "model affinity"} for result in results)
+    assert all(result.evidence_details for result in results)
+    assert all("°" in result.evidence_details[0] for result in results)
+
+
+def test_custom_color_reports_weighted_training_anchors(trained_engine):
+    custom = PaletteColor("custom:#f11919", "Custom", "#f11919", (241, 25, 25))
+    details = trained_engine.recommend([custom], "balanced", 1)[0].evidence_details
+    assert any("interpreted through" in detail for detail in details)
+
+
+def test_spectrum_scope_generates_continuous_colors(trained_engine):
+    results = trained_engine.recommend([clustered_dataset().colors[0]], "balanced", 4, "spectrum")
+    assert len(results) == 4
+    assert all(result.color.id.startswith("generated:") for result in results)
+    assert all(result.color.metadata["generated"] is True for result in results)
+    assert all("OKLCH" in result.evidence_details[-1] for result in results)
+
+
+def test_modes_create_distinct_spectrum_directions(trained_engine):
+    selected = [clustered_dataset().colors[0]]
+    palettes = {mode: [item.color.hex for item in trained_engine.recommend(selected, mode, 4, "spectrum")] for mode in ("quiet", "balanced", "vivid")}
+    assert len({tuple(colors) for colors in palettes.values()}) == 3
+
+
+def test_diagnostics_weights_include_harmony_retrieval(trained_engine):
+    weights = trained_engine.diagnostics()["metricWeights"]
+    assert weights["groupRecallAt10"] == .40
+    assert sum(weights.values()) == pytest.approx(1)
 
 
 def test_rgb_only_palette_can_train():

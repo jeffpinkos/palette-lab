@@ -31,6 +31,10 @@ describe('WadaPaletteProvider', () => {
       id: '7', name: 'First', hex: '#112233', rgb: [17, 34, 51], metadata: { sourceIndex: 7, useCount: 2 },
     })
   })
+  it('repairs obvious source casing mistakes for display', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response({ colors: [{ ...payload.colors[0], name: 'Calamine BLue' }] })))
+    expect((await new WadaPaletteProvider().load()).colors[0].name).toBe('Calamine Blue')
+  })
   it('normalizes numeric group IDs to strings', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()))
     expect((await new WadaPaletteProvider().load()).groupsByColor).toEqual({ '7': ['2', '8'], '9': [] })

@@ -16,7 +16,7 @@ const dataset: PaletteDataset = {
 }
 
 const recommend = (overrides: Partial<Parameters<GroupCooccurrenceEngine['recommend']>[0]> = {}) => new GroupCooccurrenceEngine().recommend({
-  dataset, selectedColors: [dataset.colors[0]], mode: 'balanced', limit: 4, ...overrides,
+  dataset, selectedColors: [dataset.colors[0]], mode: 'balanced', scope: 'palette', limit: 4, ...overrides,
 })
 
 describe('GroupCooccurrenceEngine', () => {
@@ -53,7 +53,11 @@ describe('GroupCooccurrenceEngine', () => {
     }
   })
   it('attaches explainable evidence', async () => {
-    expect((await recommend())[0].evidence).toEqual({ label: 'shared', value: 2 })
+    expect((await recommend())[0].evidence).toEqual({ label: 'shared groups', value: 2, details: ['Appears with the selection in 2 palette groups'] })
+  })
+  it('uses singular evidence grammar', async () => {
+    const result = (await recommend()).find((item) => item.evidence?.value === 1)
+    expect(result?.evidence).toMatchObject({ label: 'shared group', details: ['Appears with the selection in 1 palette group'] })
   })
   it('favors perceptually near candidates in quiet mode', async () => {
     const ids = (await recommend({ mode: 'quiet' })).map((item) => item.color.id)

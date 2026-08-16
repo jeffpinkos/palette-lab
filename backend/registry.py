@@ -12,7 +12,7 @@ wada_provider = GroupedJsonPaletteProvider(
         id="wada-1933", name="WADA",
         description="Choose up to four starting colors. Wada studies the company they keep.",
         source_name="Sanzo Wada", source_url="https://sanzo-wada.dmbk.io/",
-        attribution="Sanzo Wada · 1933", edition_label="No. 0348",
+        attribution="Sanzo Wada · 1933", edition_label="348 combinations",
         group_label="historic combinations",
     ),
     JsonFieldMapping(collection="colors", id="index", name="name", hex="hex", rgb="rgb_array", groups="combinations"),

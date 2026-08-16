@@ -10,7 +10,7 @@ const request: RecommendationRequest = {
   selectedColors: [
     { id: 'red', name: 'Red', hex: '#ff0000', rgb: [255, 0, 0] },
     { id: 'custom:#123456', name: 'Custom color', hex: '#123456', rgb: [18, 52, 86] },
-  ], mode: 'vivid', limit: 6,
+  ], mode: 'vivid', scope: 'spectrum', limit: 6,
 }
 const recommendation = { color: { id: 'green', name: 'Green', hex: '#00ff00', rgb: [0, 255, 0] }, score: .88, evidence: { label: 'neighbors', value: 12 } }
 const response = (body: unknown, ok = true, status = 200) => ({ ok, status, json: vi.fn().mockResolvedValue(body) })
@@ -20,7 +20,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('ApiRecommendationEngine', () => {
   it('uses the default engine identity', () => expect(new ApiRecommendationEngine().id).toBe('group-cooccurrence-v1'))
   it('accepts another remote engine identity', () => expect(new ApiRecommendationEngine('/ml', 'embedding-v2').id).toBe('embedding-v2'))
-  it('describes itself as a remote service', () => expect(new ApiRecommendationEngine().name).toBe('Remote ML service'))
+  it('uses an artist-facing model name', () => expect(new ApiRecommendationEngine().name).toBe('Wada harmony model'))
   it('posts to the configured API', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response({ recommendations: [recommendation] }))
     vi.stubGlobal('fetch', fetchMock)
@@ -36,7 +36,7 @@ describe('ApiRecommendationEngine', () => {
       palette_id: 'palette-x', engine_id: 'embedding-v2', colors: [
         { id: 'red', name: 'Red', hex: '#ff0000', rgb: [255, 0, 0] },
         { id: 'custom:#123456', name: 'Custom color', hex: '#123456', rgb: [18, 52, 86] },
-      ], mode: 'vivid', limit: 6,
+      ], mode: 'vivid', scope: 'spectrum', limit: 6,
     })
   })
   it('sends JSON content headers', async () => {

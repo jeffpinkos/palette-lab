@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -38,7 +39,7 @@ class GroupedJsonPaletteProvider:
         records = payload[self._fields.collection]
         colors = tuple(PaletteColor(
             id=str(item[self._fields.id]),
-            name=item[self._fields.name],
+            name=re.sub(r"\bBLue\b", "Blue", item[self._fields.name]),
             hex=item[self._fields.hex],
             rgb=tuple(item[self._fields.rgb]),
             metadata={"sourceRecord": item[self._fields.id]},

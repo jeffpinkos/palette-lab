@@ -6,7 +6,7 @@ type ApiRecommendation = { color: Recommendation['color']; score: number; eviden
 /** Optional remote adapter. Swap this into runtime.ts when the Python service should own inference. */
 export class ApiRecommendationEngine implements RecommendationEngine {
   readonly id: string
-  readonly name = 'Remote ML service'
+  readonly name = 'Wada harmony model'
 
   constructor(private readonly baseUrl = '/api', engineId = 'group-cooccurrence-v1') {
     this.id = engineId
@@ -21,6 +21,7 @@ export class ApiRecommendationEngine implements RecommendationEngine {
         engine_id: this.id,
         colors: request.selectedColors.map(({ id, name, hex, rgb }) => ({ id, name, hex, rgb })),
         mode: request.mode,
+        scope: request.scope,
         limit: request.limit,
       }),
     })

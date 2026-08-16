@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closestColor, colorFromHex, normalizeHex, rgbDistance } from './colorMath'
+import { closestColor, colorFromHex, normalizeHex, perceptualDistance, rgbDistance, rgbToOklab } from './colorMath'
 import type { PaletteColor } from '../domain/palette'
 
 const black: PaletteColor = { id: 'black', name: 'Black', hex: '#000000', rgb: [0, 0, 0] }
@@ -43,5 +43,17 @@ describe('rgbDistance', () => {
   it('is symmetric', () => expect(rgbDistance(red, white)).toBeCloseTo(rgbDistance(white, red), 10))
   it('orders closer colors below farther colors', () => {
     expect(rgbDistance(red, { ...red, rgb: [250, 5, 5] })).toBeLessThan(rgbDistance(red, white))
+  })
+})
+
+describe('perceptual color math', () => {
+  it('maps black and white to the OKLab lightness endpoints', () => {
+    expect(rgbToOklab(black)[0]).toBeCloseTo(0, 6)
+    expect(rgbToOklab(white)[0]).toBeCloseTo(1, 6)
+  })
+  it('is zero for identical colors', () => expect(perceptualDistance(red, red)).toBe(0))
+  it('is symmetric and normalized', () => {
+    expect(perceptualDistance(red, white)).toBeCloseTo(perceptualDistance(white, red), 10)
+    expect(perceptualDistance(black, white)).toBe(1)
   })
 })

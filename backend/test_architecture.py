@@ -63,8 +63,8 @@ class CountingEngine:
         self.fits += 1
         self.dataset = dataset
 
-    def recommend(self, selected_colors, mode, limit):
-        self.calls.append((selected_colors, mode, limit))
+    def recommend(self, selected_colors, mode, limit, scope="palette"):
+        self.calls.append((selected_colors, mode, limit, scope))
         selected_ids = {color.id for color in selected_colors}
         color = next(color for color in self.dataset.colors if color.id not in selected_ids)
         return [Recommendation(color, .5)][:limit]
@@ -87,9 +87,9 @@ class TestDomainSerialization:
         assert result["sourceUrl"] is None
 
     def test_recommendation_serializes_evidence(self):
-        recommendation = Recommendation(sample_dataset().colors[0], .123456, "shared", 3).as_dict()
+        recommendation = Recommendation(sample_dataset().colors[0], .123456, "shared groups", 3, ("Historic overlap",)).as_dict()
         assert recommendation["score"] == .1235
-        assert recommendation["evidence"] == {"label": "shared", "value": 3}
+        assert recommendation["evidence"] == {"label": "shared groups", "value": 3, "details": ("Historic overlap",)}
 
     def test_recommendation_omits_absent_evidence(self):
         assert Recommendation(sample_dataset().colors[0], .5).as_dict()["evidence"] is None
@@ -204,7 +204,8 @@ class TestGroupCooccurrenceEngine:
 
     def test_evidence_reports_shared_groups(self, fitted_engine):
         result = fitted_engine.recommend(selected(sample_dataset(), "a"), "balanced", 1)[0]
-        assert (result.evidence_label, result.evidence_value) == ("shared", 2)
+        assert (result.evidence_label, result.evidence_value) == ("shared groups", 2)
+        assert result.evidence_details == ("Appears with the selection in 2 palette groups",)
 
     def test_multiple_selections_union_observed_groups(self, fitted_engine):
         ids = {item.color.id for item in fitted_engine.recommend(selected(sample_dataset(), "c", "d"), "balanced", 10)}
@@ -273,8 +274,8 @@ class TestRecommendationService:
     def test_passes_inference_arguments_unchanged(self):
         service, _ = self.service()
         colors = selected(sample_dataset(), "a")
-        service.recommend("sample", "counting", colors, "vivid", 7)
-        assert CountingEngine.instances[0].calls == [(colors, "vivid", 7)]
+        service.recommend("sample", "counting", colors, "vivid", 7, "spectrum")
+        assert CountingEngine.instances[0].calls == [(colors, "vivid", 7, "spectrum")]
 
     def test_returns_engine_results(self):
         service, _ = self.service()

@@ -1,5 +1,6 @@
 export type ColorId = string
 export type HarmonyMode = 'quiet' | 'balanced' | 'vivid'
+export type RecommendationScope = 'palette' | 'spectrum'
 
 export type PaletteColor = {
   id: ColorId
@@ -32,12 +33,13 @@ export type PaletteDataset = {
 export type Recommendation = {
   color: PaletteColor
   score: number
-  evidence?: { label: string; value: number }
+  evidence?: { label: string; value: number; details?: string[] }
 }
 
 export type RecommendationRequest = {
   dataset: PaletteDataset
   selectedColors: PaletteColor[]
   mode: HarmonyMode
+  scope: RecommendationScope
   limit: number
 }

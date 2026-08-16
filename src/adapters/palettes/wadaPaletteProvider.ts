@@ -11,6 +11,7 @@ type WadaColor = {
 }
 
 type WadaPayload = { colors: WadaColor[] }
+const normalizeDisplayName = (name: string) => name.replace(/\bBLue\b/g, 'Blue')
 
 export class WadaPaletteProvider implements PaletteProvider {
   readonly id = 'wada-1933'
@@ -23,7 +24,7 @@ export class WadaPaletteProvider implements PaletteProvider {
     const payload = await response.json() as WadaPayload
     const colors = payload.colors.map((color) => ({
       id: String(color.index),
-      name: color.name,
+      name: normalizeDisplayName(color.name),
       hex: color.hex,
       rgb: color.rgb_array,
       metadata: { sourceIndex: color.index, useCount: color.use_count },
@@ -37,7 +38,7 @@ export class WadaPaletteProvider implements PaletteProvider {
         sourceName: 'Sanzo Wada',
         sourceUrl: 'https://sanzo-wada.dmbk.io/',
         attribution: 'Sanzo Wada · 1933',
-        editionLabel: 'No. 0348',
+        editionLabel: '348 combinations',
         groupLabel: 'historic combinations',
       },
       colors,

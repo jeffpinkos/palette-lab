@@ -51,7 +51,12 @@ class Recommendation:
     score: float
     evidence_label: Optional[str] = None
     evidence_value: Optional[int] = None
+    evidence_details: tuple[str, ...] = ()
 
     def as_dict(self) -> dict:
-        evidence = None if self.evidence_label is None else {"label": self.evidence_label, "value": self.evidence_value}
+        evidence = None if self.evidence_label is None else {
+            "label": self.evidence_label,
+            "value": self.evidence_value,
+            "details": self.evidence_details,
+        }
         return {"color": self.color.as_dict(), "score": round(self.score, 4), "evidence": evidence}

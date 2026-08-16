@@ -38,9 +38,9 @@ class RecommendationService:
             self._engines[key] = engine
         return self._engines[key]
 
-    def recommend(self, palette_id: str, engine_id: str, selected_colors: list[PaletteColor], mode: str, limit: int) -> list[Recommendation]:
+    def recommend(self, palette_id: str, engine_id: str, selected_colors: list[PaletteColor], mode: str, limit: int, scope: str = "palette") -> list[Recommendation]:
         self.dataset(palette_id)
-        return self._engine(palette_id, engine_id).recommend(selected_colors, mode, limit)
+        return self._engine(palette_id, engine_id).recommend(selected_colors, mode, limit, scope)
 
     def diagnostics(self, palette_id: str, engine_id: str) -> dict:
         engine = self._engine(palette_id, engine_id)
