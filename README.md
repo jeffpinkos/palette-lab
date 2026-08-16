@@ -64,3 +64,5 @@ npm test
 npm run build
 python -m pytest backend/test_architecture.py
 ```
+
+Run all 100 unit cases together with `npm run test:all`; use `npm run test:watch` while developing TypeScript modules.

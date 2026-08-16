@@ -11,7 +11,7 @@ const dataset: PaletteDataset = {
     { id: 'd', name: 'Green', hex: '#00ff00', rgb: [0, 255, 0] },
     { id: 'e', name: 'Orphan', hex: '#ffffff', rgb: [255, 255, 255] },
   ],
-  groupsByColor: { a: ['one', 'two'], b: ['one', 'two'], c: ['one'], d: ['two', 'three'], e: [] },
+  groupsByColor: { a: ['one', 'two'], b: ['one', 'two'], c: ['one'], d: ['two'], e: [] },
   groupCount: 3,
 }
 

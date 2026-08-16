@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:all": "vitest run && python3 -m pytest backend/test_architecture.py -q"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",
