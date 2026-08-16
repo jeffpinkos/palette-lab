@@ -25,6 +25,11 @@ def sample_dataset(palette_id="sample"):
     return PaletteDataset(metadata(palette_id), colors, groups, 2, ("a",))
 
 
+def selected(dataset, *ids):
+    by_id = {color.id: color for color in dataset.colors}
+    return [by_id[color_id] for color_id in ids]
+
+
 @pytest.fixture
 def fitted_engine():
     engine = GroupCooccurrenceEngine()
@@ -58,9 +63,10 @@ class CountingEngine:
         self.fits += 1
         self.dataset = dataset
 
-    def recommend(self, selected_color_ids, mode, limit):
-        self.calls.append((selected_color_ids, mode, limit))
-        color = next(color for color in self.dataset.colors if color.id not in selected_color_ids)
+    def recommend(self, selected_colors, mode, limit):
+        self.calls.append((selected_colors, mode, limit))
+        selected_ids = {color.id for color in selected_colors}
+        color = next(color for color in self.dataset.colors if color.id not in selected_ids)
         return [Recommendation(color, .5)][:limit]
 
 
@@ -155,7 +161,7 @@ class TestGroupedJsonPaletteProvider:
 class TestGroupCooccurrenceEngine:
     def test_requires_fit(self):
         with pytest.raises(RuntimeError, match="fit"):
-            GroupCooccurrenceEngine().recommend(["a"], "balanced", 4)
+            GroupCooccurrenceEngine().recommend([sample_dataset().colors[0]], "balanced", 4)
 
     def test_publishes_stable_identity(self):
         assert GroupCooccurrenceEngine.id == "group-cooccurrence-v1"
@@ -165,46 +171,59 @@ class TestGroupCooccurrenceEngine:
         assert fitted_engine.recommend([], "balanced", 4) == []
 
     def test_returns_empty_for_unknown_selections(self, fitted_engine):
-        assert fitted_engine.recommend(["unknown"], "balanced", 4) == []
+        empty = PaletteDataset(metadata(), (), {}, 0)
+        fitted_engine.fit(empty)
+        assert fitted_engine.recommend([PaletteColor("custom", "Custom", "#123456", (18, 52, 86))], "balanced", 4) == []
 
-    def test_ignores_unknown_id_when_known_id_remains(self, fitted_engine):
-        assert len(fitted_engine.recommend(["unknown", "a"], "balanced", 4)) == 3
+    def test_projects_custom_color_to_nearest_anchor(self, fitted_engine):
+        custom = PaletteColor("custom:#fd0101", "Custom color", "#fd0101", (253, 1, 1))
+        assert len(fitted_engine.recommend([custom], "balanced", 4)) == 3
 
     def test_excludes_selected_colors(self, fitted_engine):
-        ids = {item.color.id for item in fitted_engine.recommend(["a", "b"], "balanced", 10)}
+        ids = {item.color.id for item in fitted_engine.recommend(selected(sample_dataset(), "a", "b"), "balanced", 10)}
         assert not ids & {"a", "b"}
 
     def test_excludes_colors_without_overlap(self, fitted_engine):
-        assert "e" not in {item.color.id for item in fitted_engine.recommend(["a"], "balanced", 10)}
+        assert "e" not in {item.color.id for item in fitted_engine.recommend(selected(sample_dataset(), "a"), "balanced", 10)}
 
     @pytest.mark.parametrize("limit, expected", [(0, 0), (1, 1), (2, 2), (99, 3)])
     def test_respects_limit(self, fitted_engine, limit, expected):
-        assert len(fitted_engine.recommend(["a"], "balanced", limit)) == expected
+        assert len(fitted_engine.recommend(selected(sample_dataset(), "a"), "balanced", limit)) == expected
 
     @pytest.mark.parametrize("mode", ["quiet", "balanced", "vivid"])
     def test_all_modes_return_finite_normalized_scores(self, fitted_engine, mode):
-        assert all(0 < item.score <= 1 for item in fitted_engine.recommend(["a"], mode, 10))
+        assert all(0 < item.score <= 1 for item in fitted_engine.recommend(selected(sample_dataset(), "a"), mode, 10))
 
     def test_quiet_favors_near_color(self, fitted_engine):
-        ids = [item.color.id for item in fitted_engine.recommend(["a"], "quiet", 10)]
+        ids = [item.color.id for item in fitted_engine.recommend(selected(sample_dataset(), "a"), "quiet", 10)]
         assert ids.index("c") < ids.index("d")
 
     def test_vivid_favors_distant_color(self, fitted_engine):
-        ids = [item.color.id for item in fitted_engine.recommend(["a"], "vivid", 10)]
+        ids = [item.color.id for item in fitted_engine.recommend(selected(sample_dataset(), "a"), "vivid", 10)]
         assert ids.index("d") < ids.index("c")
 
     def test_evidence_reports_shared_groups(self, fitted_engine):
-        result = fitted_engine.recommend(["a"], "balanced", 1)[0]
+        result = fitted_engine.recommend(selected(sample_dataset(), "a"), "balanced", 1)[0]
         assert (result.evidence_label, result.evidence_value) == ("shared", 2)
 
     def test_multiple_selections_union_observed_groups(self, fitted_engine):
-        ids = {item.color.id for item in fitted_engine.recommend(["c", "d"], "balanced", 10)}
+        ids = {item.color.id for item in fitted_engine.recommend(selected(sample_dataset(), "c", "d"), "balanced", 10)}
         assert {"a", "b"}.issubset(ids)
 
     def test_fit_can_replace_the_active_palette(self, fitted_engine):
         other = PaletteDataset(metadata("other"), (PaletteColor("x", "X", "#000000", (0, 0, 0)), PaletteColor("y", "Y", "#ffffff", (255, 255, 255))), {"x": frozenset(("g",)), "y": frozenset(("g",))}, 1)
         fitted_engine.fit(other)
-        assert [item.color.id for item in fitted_engine.recommend(["x"], "balanced", 4)] == ["y"]
+        assert [item.color.id for item in fitted_engine.recommend(selected(other, "x"), "balanced", 4)] == ["y"]
+
+    def test_custom_color_uses_exact_rgb_for_distance(self, fitted_engine):
+        custom = PaletteColor("custom:#fe0101", "Custom color", "#fe0101", (254, 1, 1))
+        results = fitted_engine.recommend([custom], "quiet", 10)
+        scores = {item.color.id: item.score for item in results}
+        assert scores["c"] > scores["d"]
+
+    def test_does_not_recommend_custom_colors_nearest_anchor(self, fitted_engine):
+        custom = PaletteColor("custom:#fe0101", "Custom color", "#fe0101", (254, 1, 1))
+        assert "a" not in {item.color.id for item in fitted_engine.recommend([custom], "balanced", 10)}
 
 
 class TestRecommendationService:
@@ -237,46 +256,48 @@ class TestRecommendationService:
     def test_rejects_unknown_engine(self):
         service, _ = self.service()
         with pytest.raises(KeyError, match="Unknown engine"):
-            service.recommend("sample", "missing", ["a"], "balanced", 4)
+            service.recommend("sample", "missing", selected(sample_dataset(), "a"), "balanced", 4)
 
-    def test_rejects_unknown_color(self):
+    def test_accepts_arbitrary_color(self):
         service, _ = self.service()
-        with pytest.raises(ValueError, match="Unknown color ids"):
-            service.recommend("sample", "counting", ["missing"], "balanced", 4)
+        custom = PaletteColor("custom:#123456", "Custom color", "#123456", (18, 52, 86))
+        assert service.recommend("sample", "counting", [custom], "balanced", 4)
 
     def test_fits_engine_once(self):
         service, _ = self.service()
-        service.recommend("sample", "counting", ["a"], "balanced", 4)
-        service.recommend("sample", "counting", ["b"], "quiet", 2)
+        service.recommend("sample", "counting", selected(sample_dataset(), "a"), "balanced", 4)
+        service.recommend("sample", "counting", selected(sample_dataset(), "b"), "quiet", 2)
         assert len(CountingEngine.instances) == 1
         assert CountingEngine.instances[0].fits == 1
 
     def test_passes_inference_arguments_unchanged(self):
         service, _ = self.service()
-        service.recommend("sample", "counting", ["a"], "vivid", 7)
-        assert CountingEngine.instances[0].calls == [(["a"], "vivid", 7)]
+        colors = selected(sample_dataset(), "a")
+        service.recommend("sample", "counting", colors, "vivid", 7)
+        assert CountingEngine.instances[0].calls == [(colors, "vivid", 7)]
 
     def test_returns_engine_results(self):
         service, _ = self.service()
-        result = service.recommend("sample", "counting", ["a"], "balanced", 4)
+        result = service.recommend("sample", "counting", selected(sample_dataset(), "a"), "balanced", 4)
         assert result[0].score == .5
         assert result[0].color.id == "b"
 
     def test_caches_separate_engine_per_palette(self):
         service, _ = self.service([sample_dataset("one"), sample_dataset("two")])
-        service.recommend("one", "counting", ["a"], "balanced", 4)
-        service.recommend("two", "counting", ["a"], "balanced", 4)
+        service.recommend("one", "counting", selected(sample_dataset("one"), "a"), "balanced", 4)
+        service.recommend("two", "counting", selected(sample_dataset("two"), "a"), "balanced", 4)
         assert len(CountingEngine.instances) == 2
         assert {engine.dataset.metadata.id for engine in CountingEngine.instances} == {"one", "two"}
 
     def test_zero_limit_returns_no_results(self):
         service, _ = self.service()
-        assert service.recommend("sample", "counting", ["a"], "balanced", 0) == []
+        assert service.recommend("sample", "counting", selected(sample_dataset(), "a"), "balanced", 0) == []
 
 
 def test_wada_provider_and_engine_are_independent():
     service = RecommendationService({wada_provider.id: wada_provider}, {GroupCooccurrenceEngine.id: GroupCooccurrenceEngine})
-    recommendations = service.recommend("wada-1933", GroupCooccurrenceEngine.id, ["19", "112"], "balanced", 4)
+    dataset = wada_provider.load()
+    recommendations = service.recommend("wada-1933", GroupCooccurrenceEngine.id, selected(dataset, "19", "112"), "balanced", 4)
     assert len(recommendations) == 4
     assert not {"19", "112"} & {item.color.id for item in recommendations}
     assert all(item.evidence_value and item.evidence_value > 0 for item in recommendations)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .contracts import PaletteProvider, RecommendationEngine
-from .domain import PaletteDataset, Recommendation
+from .domain import PaletteColor, PaletteDataset, Recommendation
 
 
 class RecommendationService:
@@ -38,10 +38,11 @@ class RecommendationService:
             self._engines[key] = engine
         return self._engines[key]
 
-    def recommend(self, palette_id: str, engine_id: str, color_ids: list[str], mode: str, limit: int) -> list[Recommendation]:
-        dataset = self.dataset(palette_id)
-        known = {color.id for color in dataset.colors}
-        unknown = [color_id for color_id in color_ids if color_id not in known]
-        if unknown:
-            raise ValueError(f"Unknown color ids: {unknown}")
-        return self._engine(palette_id, engine_id).recommend(color_ids, mode, limit)
+    def recommend(self, palette_id: str, engine_id: str, selected_colors: list[PaletteColor], mode: str, limit: int) -> list[Recommendation]:
+        self.dataset(palette_id)
+        return self._engine(palette_id, engine_id).recommend(selected_colors, mode, limit)
+
+    def diagnostics(self, palette_id: str, engine_id: str) -> dict:
+        engine = self._engine(palette_id, engine_id)
+        diagnostics = getattr(engine, "diagnostics", None)
+        return diagnostics() if diagnostics else {"engine": {"id": engine.id, "name": engine.name}, "diagnostics": None}

@@ -37,7 +37,7 @@ export type Recommendation = {
 
 export type RecommendationRequest = {
   dataset: PaletteDataset
-  selectedColorIds: ColorId[]
+  selectedColors: PaletteColor[]
   mode: HarmonyMode
   limit: number
 }

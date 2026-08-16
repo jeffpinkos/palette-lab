@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from .domain import PaletteDataset, Recommendation
+from .domain import PaletteColor, PaletteDataset, Recommendation
 
 
 class PaletteProvider(Protocol):
@@ -16,4 +16,4 @@ class RecommendationEngine(Protocol):
     name: str
 
     def fit(self, dataset: PaletteDataset) -> None: ...
-    def recommend(self, selected_color_ids: list[str], mode: str, limit: int) -> list[Recommendation]: ...
+    def recommend(self, selected_colors: list[PaletteColor], mode: str, limit: int) -> list[Recommendation]: ...

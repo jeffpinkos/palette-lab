@@ -7,7 +7,10 @@ const request: RecommendationRequest = {
     metadata: { id: 'palette-x', name: 'X', description: '', sourceName: 'Test', groupLabel: 'sets' },
     colors: [], groupsByColor: {}, groupCount: 0,
   },
-  selectedColorIds: ['red', 'blue'], mode: 'vivid', limit: 6,
+  selectedColors: [
+    { id: 'red', name: 'Red', hex: '#ff0000', rgb: [255, 0, 0] },
+    { id: 'custom:#123456', name: 'Custom color', hex: '#123456', rgb: [18, 52, 86] },
+  ], mode: 'vivid', limit: 6,
 }
 const recommendation = { color: { id: 'green', name: 'Green', hex: '#00ff00', rgb: [0, 255, 0] }, score: .88, evidence: { label: 'neighbors', value: 12 } }
 const response = (body: unknown, ok = true, status = 200) => ({ ok, status, json: vi.fn().mockResolvedValue(body) })
@@ -30,7 +33,10 @@ describe('ApiRecommendationEngine', () => {
     await new ApiRecommendationEngine('/ml', 'embedding-v2').recommend(request)
     const options = fetchMock.mock.calls[0][1]
     expect(JSON.parse(options.body)).toEqual({
-      palette_id: 'palette-x', engine_id: 'embedding-v2', color_ids: ['red', 'blue'], mode: 'vivid', limit: 6,
+      palette_id: 'palette-x', engine_id: 'embedding-v2', colors: [
+        { id: 'red', name: 'Red', hex: '#ff0000', rgb: [255, 0, 0] },
+        { id: 'custom:#123456', name: 'Custom color', hex: '#123456', rgb: [18, 52, 86] },
+      ], mode: 'vivid', limit: 6,
     })
   })
   it('sends JSON content headers', async () => {

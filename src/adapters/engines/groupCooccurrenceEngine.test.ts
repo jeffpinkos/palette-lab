@@ -16,7 +16,7 @@ const dataset: PaletteDataset = {
 }
 
 const recommend = (overrides: Partial<Parameters<GroupCooccurrenceEngine['recommend']>[0]> = {}) => new GroupCooccurrenceEngine().recommend({
-  dataset, selectedColorIds: ['a'], mode: 'balanced', limit: 4, ...overrides,
+  dataset, selectedColors: [dataset.colors[0]], mode: 'balanced', limit: 4, ...overrides,
 })
 
 describe('GroupCooccurrenceEngine', () => {
@@ -28,15 +28,16 @@ describe('GroupCooccurrenceEngine', () => {
   it('uses only the generic palette contract', async () => {
     expect((await recommend()).map((item) => item.color.id)).toEqual(['b', 'd', 'c'])
   })
-  it('returns no results without selections', async () => expect(await recommend({ selectedColorIds: [] })).toEqual([]))
-  it('ignores unknown selected IDs when a known ID remains', async () => {
-    expect(await recommend({ selectedColorIds: ['unknown', 'a'] })).toHaveLength(3)
+  it('returns no results without selections', async () => expect(await recommend({ selectedColors: [] })).toEqual([]))
+  it('projects an arbitrary color onto the nearest palette anchor', async () => {
+    const custom = { id: 'custom:#fd0101', name: 'Custom color', hex: '#fd0101', rgb: [253, 1, 1] as [number, number, number] }
+    expect(await recommend({ selectedColors: [custom] })).toHaveLength(3)
   })
-  it('returns no results when every selected ID is unknown', async () => {
-    expect(await recommend({ selectedColorIds: ['unknown'] })).toEqual([])
+  it('returns no results for an empty palette', async () => {
+    expect(await recommend({ dataset: { ...dataset, colors: [] }, selectedColors: [{ id: 'x', name: 'X', hex: '#000000', rgb: [0, 0, 0] }] })).toEqual([])
   })
   it('excludes selected colors', async () => {
-    expect((await recommend({ selectedColorIds: ['a', 'b'] })).map((item) => item.color.id)).not.toContain('a')
+    expect((await recommend({ selectedColors: [dataset.colors[0], dataset.colors[1]] })).map((item) => item.color.id)).not.toContain('a')
   })
   it('excludes candidates with no group overlap', async () => {
     expect((await recommend()).map((item) => item.color.id)).not.toContain('e')
@@ -64,18 +65,27 @@ describe('GroupCooccurrenceEngine', () => {
   })
   it('does not mutate colors, groups, or selections', async () => {
     const before = JSON.stringify(dataset)
-    const selected = ['a']
-    await recommend({ selectedColorIds: selected })
+    const selected = [dataset.colors[0]]
+    await recommend({ selectedColors: selected })
     expect(JSON.stringify(dataset)).toBe(before)
-    expect(selected).toEqual(['a'])
+    expect(selected).toEqual([dataset.colors[0]])
   })
   it('supports palettes whose colors omit groups', async () => {
     const sparse = { ...dataset, groupsByColor: { a: ['one'], b: ['one'] } }
     expect((await recommend({ dataset: sparse })).map((item) => item.color.id)).toEqual(['b'])
   })
   it('combines groups from multiple selected colors', async () => {
-    const ids = (await recommend({ selectedColorIds: ['c', 'd'] })).map((item) => item.color.id)
+    const ids = (await recommend({ selectedColors: [dataset.colors[2], dataset.colors[3]] })).map((item) => item.color.id)
     expect(ids).toContain('a')
     expect(ids).toContain('b')
+  })
+  it('does not recommend the palette anchor used for a custom color', async () => {
+    const custom = { id: 'custom:#fe0101', name: 'Custom color', hex: '#fe0101', rgb: [254, 1, 1] as [number, number, number] }
+    expect((await recommend({ selectedColors: [custom] })).map((item) => item.color.id)).not.toContain('a')
+  })
+  it('uses the exact custom RGB value for mood distance', async () => {
+    const custom = { id: 'custom:#fe0101', name: 'Custom color', hex: '#fe0101', rgb: [254, 1, 1] as [number, number, number] }
+    const quiet = await recommend({ selectedColors: [custom], mode: 'quiet' })
+    expect(quiet.find((item) => item.color.id === 'c')!.score).toBeGreaterThan(quiet.find((item) => item.color.id === 'd')!.score)
   })
 })

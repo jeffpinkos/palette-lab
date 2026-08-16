@@ -6,11 +6,13 @@
   "engines": { "node": "^20.0.0 || >=22.0.0" },
   "scripts": {
     "dev": "vite",
+    "dev:api": ".venv/bin/python -m uvicorn backend.app:app --reload",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:all": "vitest run && python3 -m pytest backend/test_architecture.py -q"
+    "test:backend": ".venv/bin/python -m pytest backend -q",
+    "test:all": "vitest run && .venv/bin/python -m pytest backend -q"
   },
   "dependencies": {
     "@vitejs/plugin-react": "4.3.4",

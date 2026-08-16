@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { closestColor, rgbDistance } from './colorMath'
+import { closestColor, colorFromHex, normalizeHex, rgbDistance } from './colorMath'
 import type { PaletteColor } from '../domain/palette'
 
 const black: PaletteColor = { id: 'black', name: 'Black', hex: '#000000', rgb: [0, 0, 0] }
@@ -21,6 +21,20 @@ describe('closestColor', () => {
     closestColor(colors, '#101010')
     expect(colors).toEqual(snapshot)
   })
+})
+
+describe('normalizeHex', () => {
+  it('adds a missing hash and lowercases', () => expect(normalizeHex('ABCDEF')).toBe('#abcdef'))
+  it('preserves a valid normalized value', () => expect(normalizeHex('#123456')).toBe('#123456'))
+  it('rejects shorthand hex', () => expect(normalizeHex('#fff')).toBeNull())
+})
+
+describe('colorFromHex', () => {
+  it('returns a known palette color only for an exact match', () => expect(colorFromHex(colors, '#ff0000')).toBe(red))
+  it('preserves a non-palette hex exactly', () => expect(colorFromHex(colors, '#f02020')).toMatchObject({ id: 'custom:#f02020', hex: '#f02020', rgb: [240, 32, 32] }))
+  it('marks arbitrary colors as custom metadata', () => expect(colorFromHex(colors, '#123456')?.metadata).toEqual({ custom: true }))
+  it('works with an empty reference palette', () => expect(colorFromHex([], '#123456')).toMatchObject({ hex: '#123456' }))
+  it('rejects invalid input', () => expect(colorFromHex(colors, 'nope')).toBeNull())
 })
 
 describe('rgbDistance', () => {

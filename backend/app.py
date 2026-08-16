@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from .domain import PaletteColor
 from .registry import ENGINE_FACTORIES, PALETTE_PROVIDERS
 from .service import RecommendationService
 
@@ -12,10 +13,17 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 service = RecommendationService(PALETTE_PROVIDERS, ENGINE_FACTORIES)
 
 
+class ColorInput(BaseModel):
+    id: str
+    name: str = "Custom color"
+    hex: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    rgb: tuple[int, int, int]
+
+
 class HarmonyRequest(BaseModel):
     palette_id: str
     engine_id: str
-    color_ids: list[str] = Field(min_length=1, max_length=4)
+    colors: list[ColorInput] = Field(min_length=1, max_length=4)
     mode: Literal["quiet", "balanced", "vivid"] = "balanced"
     limit: int = Field(default=4, ge=1, le=12)
 
@@ -30,10 +38,19 @@ def palettes():
     return {"palettes": [service.dataset(palette_id).metadata.as_dict() for palette_id in service.palette_ids]}
 
 
+@app.get("/api/models/{palette_id}/{engine_id}")
+def model_diagnostics(palette_id: str, engine_id: str):
+    try:
+        return service.diagnostics(palette_id, engine_id)
+    except (KeyError, ValueError) as error:
+        raise HTTPException(400, str(error)) from error
+
+
 @app.post("/api/recommend")
 def recommend(request: HarmonyRequest):
     try:
-        recommendations = service.recommend(request.palette_id, request.engine_id, request.color_ids, request.mode, request.limit)
+        selected = [PaletteColor(color.id, color.name, color.hex.lower(), color.rgb, {"custom": color.id.startswith("custom:")}) for color in request.colors]
+        recommendations = service.recommend(request.palette_id, request.engine_id, selected, request.mode, request.limit)
     except (KeyError, ValueError) as error:
         raise HTTPException(400, str(error)) from error
     return {"recommendations": [recommendation.as_dict() for recommendation in recommendations]}

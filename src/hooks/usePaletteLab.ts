@@ -4,7 +4,7 @@ import type { ColorId, HarmonyMode, PaletteColor, PaletteDataset, Recommendation
 
 export function usePaletteLab(runtime: LabRuntime) {
   const [dataset, setDataset] = useState<PaletteDataset | null>(null)
-  const [selectedIds, setSelectedIds] = useState<ColorId[]>([])
+  const [selected, setSelected] = useState<PaletteColor[]>([])
   const [mode, setModeState] = useState<HarmonyMode>('balanced')
   const [results, setResults] = useState<Recommendation[]>([])
   const [status, setStatus] = useState<'loading' | 'ready' | 'recommending' | 'error'>('loading')
@@ -15,7 +15,8 @@ export function usePaletteLab(runtime: LabRuntime) {
     runtime.paletteProvider.load().then((loaded) => {
       if (!active) return
       setDataset(loaded)
-      setSelectedIds(loaded.defaultColorIds?.slice(0, runtime.maxSelections) ?? [])
+      const colorsById = new Map(loaded.colors.map((color) => [color.id, color]))
+      setSelected((loaded.defaultColorIds ?? []).flatMap((id) => { const color = colorsById.get(id); return color ? [color] : [] }).slice(0, runtime.maxSelections))
       setStatus('ready')
     }).catch((reason: unknown) => {
       if (!active) return
@@ -26,27 +27,25 @@ export function usePaletteLab(runtime: LabRuntime) {
   }, [runtime])
 
   const generate = useCallback(async (nextMode = mode) => {
-    if (!dataset || selectedIds.length === 0) return
+    if (!dataset || selected.length === 0) return
     setStatus('recommending')
     setError(null)
     try {
-      const nextResults = await runtime.recommendationEngine.recommend({ dataset, selectedColorIds: selectedIds, mode: nextMode, limit: runtime.resultLimit })
+      const nextResults = await runtime.recommendationEngine.recommend({ dataset, selectedColors: selected, mode: nextMode, limit: runtime.resultLimit })
       setResults(nextResults)
       setStatus('ready')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to generate recommendations')
       setStatus('error')
     }
-  }, [dataset, mode, runtime, selectedIds])
+  }, [dataset, mode, runtime, selected])
 
   const addColor = useCallback((color: PaletteColor) => {
-    setSelectedIds((current) => current.length < runtime.maxSelections && !current.includes(color.id) ? [...current, color.id] : current)
+    setSelected((current) => current.length < runtime.maxSelections && !current.some((item) => item.id === color.id) ? [...current, color] : current)
   }, [runtime.maxSelections])
 
-  const removeColor = useCallback((id: ColorId) => setSelectedIds((current) => current.filter((colorId) => colorId !== id)), [])
+  const removeColor = useCallback((id: ColorId) => setSelected((current) => current.filter((color) => color.id !== id)), [])
   const setMode = useCallback((nextMode: HarmonyMode) => { setModeState(nextMode); if (results.length > 0) void generate(nextMode) }, [generate, results.length])
-  const colorsById = new Map(dataset?.colors.map((color) => [color.id, color]) ?? [])
-  const selected = selectedIds.flatMap((id) => { const color = colorsById.get(id); return color ? [color] : [] })
 
   return { dataset, selected, mode, results, status, error, addColor, removeColor, setMode, generate }
 }

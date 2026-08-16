@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search, X } from 'lucide-react'
-import { closestColor } from '../lib/colorMath'
+import { colorFromHex, normalizeHex } from '../lib/colorMath'
 import type { ColorId, PaletteColor } from '../domain/palette'
 
 type Props = {
@@ -15,10 +15,11 @@ type Props = {
 export function ColorSearch({ colors, selected, paletteName, maxSelections, onAdd, onRemove }: Props) {
   const [query, setQuery] = useState('')
   const [hex, setHex] = useState('#d95040')
+  const normalizedHex = normalizeHex(hex)
   const matches = useMemo(() => query.trim() ? colors.filter((color) => `${color.name} ${color.hex}`.toLowerCase().includes(query.toLowerCase())).slice(0, 6) : [], [colors, query])
 
   const addHex = () => {
-    const color = closestColor(colors, hex)
+    const color = colorFromHex(colors, hex)
     if (color) onAdd(color)
   }
 
@@ -29,8 +30,8 @@ export function ColorSearch({ colors, selected, paletteName, maxSelections, onAd
       {matches.length > 0 ? <div className="search-results">{matches.map((color) => <button key={color.id} onClick={() => { onAdd(color); setQuery('') }}><span style={{ background: color.hex }} />{color.name}<small>{color.hex}</small></button>)}</div> : null}
     </div>
     <div className="hex-row">
-      <label><span style={{ background: /^#[0-9a-f]{6}$/i.test(hex) ? hex : '#d95040' }} /><input aria-label="Hex color" value={hex} onChange={(event) => setHex(event.target.value)} /></label>
-      <button className="secondary" onClick={addHex}><Plus size={17} />Add color</button>
+      <label className="hex-input"><input className="color-picker" type="color" aria-label="Pick any color" value={normalizedHex ?? '#d95040'} onChange={(event) => setHex(event.target.value)} /><input className="hex-text" aria-label="Hex color" value={hex} onChange={(event) => setHex(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') addHex() }} /></label>
+      <button className="secondary" disabled={!normalizedHex} onClick={addHex}><Plus size={17} />Add any color</button>
     </div>
     <p className="count">{selected.length} / {maxSelections} colors selected</p>
     <div className="selected-colors">

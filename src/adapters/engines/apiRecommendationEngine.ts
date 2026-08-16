@@ -19,7 +19,7 @@ export class ApiRecommendationEngine implements RecommendationEngine {
       body: JSON.stringify({
         palette_id: request.dataset.metadata.id,
         engine_id: this.id,
-        color_ids: request.selectedColorIds,
+        colors: request.selectedColors.map(({ id, name, hex, rgb }) => ({ id, name, hex, rgb })),
         mode: request.mode,
         limit: request.limit,
       }),

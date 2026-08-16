@@ -20,4 +20,16 @@ wada_provider = GroupedJsonPaletteProvider(
 )
 
 PALETTE_PROVIDERS = {wada_provider.id: wada_provider}
-ENGINE_FACTORIES = {GroupCooccurrenceEngine.id: GroupCooccurrenceEngine}
+
+
+def cluster_ensemble_factory():
+    # Keep the baseline API importable in minimal environments; ML dependencies
+    # are loaded only when this engine is selected.
+    from .adapters.cluster_ensemble_engine import ClusterEnsembleEngine
+    return ClusterEnsembleEngine()
+
+
+ENGINE_FACTORIES = {
+    GroupCooccurrenceEngine.id: GroupCooccurrenceEngine,
+    "cluster-ensemble-v1": cluster_ensemble_factory,
+}
