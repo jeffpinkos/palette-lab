@@ -28,4 +28,9 @@ describe('PaletteGrade', () => {
     expect(renderToStaticMarkup(<PaletteGrade assessment={null} status="loading" selectedCount={2} />)).toContain('Comparing with Wada')
     expect(renderToStaticMarkup(<PaletteGrade assessment={null} status="error" selectedCount={2} />)).toContain('Grade unavailable')
   })
+
+  it('offers archive companions for a weak Wada grade', () => {
+    const html = renderToStaticMarkup(<PaletteGrade assessment={{ ...assessment, grade: 'F' }} status="ready" selectedCount={2} onExplore={() => undefined} />)
+    expect(html).toContain('Explore Wada companions')
+  })
 })

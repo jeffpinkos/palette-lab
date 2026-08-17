@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { LabRuntime } from '../config/runtime'
-import type { ColorId, HarmonyMode, PaletteAssessment, PaletteColor, PaletteDataset, Recommendation, RecommendationScope } from '../domain/palette'
+import type { LabRuntime } from '@/config'
+import type { ColorId, HarmonyMode, PaletteAssessment, PaletteColor, PaletteDataset, Recommendation, RecommendationScope } from '@/domain'
 
 export function usePaletteLab(runtime: LabRuntime) {
   const [dataset, setDataset] = useState<PaletteDataset | null>(null)
@@ -15,10 +15,10 @@ export function usePaletteLab(runtime: LabRuntime) {
   const [error, setError] = useState<string | null>(null)
   const requestId = useRef(0)
   const assessmentRequestId = useRef(0)
+  const assessmentCache = useRef(new Map<string, PaletteAssessment | null>())
 
   useEffect(() => {
     let active = true
-    void runtime.colorNamer.prepare().catch(() => undefined)
     runtime.paletteProvider.load().then((loaded) => {
       if (!active) return
       setDataset(loaded)
@@ -40,15 +40,26 @@ export function usePaletteLab(runtime: LabRuntime) {
       setAssessmentStatus('idle')
       return
     }
-    setAssessmentStatus('loading')
-    void runtime.recommendationEngine.assess({ dataset, selectedColors: selected }).then((nextAssessment) => {
-      if (activeRequest !== assessmentRequestId.current) return
-      setAssessment(nextAssessment)
+    const cacheKey = selected.map((color) => `${color.id}:${color.hex}`).sort().join('|')
+    const cached = assessmentCache.current.get(cacheKey)
+    if (cached !== undefined) {
+      setAssessment(cached)
       setAssessmentStatus('ready')
-    }).catch(() => {
-      if (activeRequest !== assessmentRequestId.current) return
-      setAssessmentStatus('error')
-    })
+      return
+    }
+    setAssessmentStatus('loading')
+    const timer = window.setTimeout(() => {
+      void runtime.recommendationEngine.assess!({ dataset, selectedColors: selected }).then((nextAssessment) => {
+        if (activeRequest !== assessmentRequestId.current) return
+        assessmentCache.current.set(cacheKey, nextAssessment)
+        setAssessment(nextAssessment)
+        setAssessmentStatus('ready')
+      }).catch(() => {
+        if (activeRequest !== assessmentRequestId.current) return
+        setAssessmentStatus('error')
+      })
+    }, 180)
+    return () => window.clearTimeout(timer)
   }, [dataset, runtime.recommendationEngine, selected])
 
   const generate = useCallback(async (nextMode = mode, nextScope = scope) => {

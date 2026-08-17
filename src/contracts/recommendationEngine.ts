@@ -1,4 +1,4 @@
-import type { PaletteAssessment, PaletteAssessmentRequest, Recommendation, RecommendationRequest } from '../domain/palette'
+import type { PaletteAssessment, PaletteAssessmentRequest, Recommendation, RecommendationRequest } from '@/domain'
 
 export interface RecommendationEngine {
   readonly id: string

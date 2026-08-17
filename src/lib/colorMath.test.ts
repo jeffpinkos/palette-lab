@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { closestColor, colorFromHex, normalizeHex, perceptualDistance, rgbDistance, rgbToOklab } from './colorMath'
-import type { PaletteColor } from '../domain/palette'
+import type { PaletteColor } from '@/domain'
 
 const black: PaletteColor = { id: 'black', name: 'Black', hex: '#000000', rgb: [0, 0, 0] }
 const white: PaletteColor = { id: 'white', name: 'White', hex: '#ffffff', rgb: [255, 255, 255] }

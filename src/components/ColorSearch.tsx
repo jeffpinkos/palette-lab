@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { Plus, Search, X } from 'lucide-react'
-import { colorFromHex, normalizeHex } from '../lib/colorMath'
-import type { ColorId, PaletteColor } from '../domain/palette'
+import { colorFromHex, normalizeHex } from '@/lib'
+import type { ColorId, PaletteColor } from '@/domain'
 
 type Props = {
   colors: PaletteColor[]
@@ -72,7 +72,7 @@ export function ColorSearch({ colors, selected, maxSelections, colorNameCount, i
         <div className="color-field" style={{ background: color.hex }}><span>{String(index + 1).padStart(2, '0')}</span></div>
         <footer><div><strong>{color.name}</strong><small>{color.hex}</small></div><button aria-label={`Remove ${color.name}`} onClick={() => onRemove(color.id)}><X size={16} /></button></footer>
       </article>)}
-      {Array.from({ length: Math.max(0, Math.min(3, maxSelections) - selected.length) }).map((_, index) => <div className="empty-swatch" key={index}>+</div>)}
+      {Array.from({ length: Math.max(0, maxSelections - selected.length) }).map((_, index) => <div className="empty-swatch" key={index}>+</div>)}
     </div>
   </div>
 }

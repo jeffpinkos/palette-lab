@@ -1,12 +1,13 @@
-import type { PaletteAssessment } from '../domain/palette'
+import type { PaletteAssessment } from '@/domain'
 
 type Props = {
   assessment: PaletteAssessment | null
   status: 'idle' | 'loading' | 'ready' | 'error'
   selectedCount: number
+  onExplore?: () => void
 }
 
-export function PaletteGrade({ assessment, status, selectedCount }: Props) {
+export function PaletteGrade({ assessment, status, selectedCount, onExplore }: Props) {
   const pending = selectedCount >= 2 && status === 'loading'
   const label = selectedCount < 2
     ? 'Add another color'
@@ -25,6 +26,6 @@ export function PaletteGrade({ assessment, status, selectedCount }: Props) {
 
   return <section className="palette-grade" aria-label="Wada palette grade" aria-live="polite">
     <div className="grade-mark"><span>Wada palette grade</span><strong>{assessment?.grade ?? '—'}</strong>{assessment?.score == null ? null : <small>{assessment.score} / 100</small>}</div>
-    <div className="grade-copy"><b>{label}</b><p>{summary}</p>{assessment?.details?.slice(0, 2).map((detail) => <small key={detail}>{detail}</small>)}</div>
+    <div className="grade-copy"><b>{label}</b><p>{summary}</p>{assessment?.details?.slice(0, 2).map((detail) => <small key={detail}>{detail}</small>)}{assessment && ['D', 'F'].includes(assessment.grade) && onExplore ? <button className="grade-action" onClick={onExplore}>Explore Wada companions</button> : null}</div>
   </section>
 }

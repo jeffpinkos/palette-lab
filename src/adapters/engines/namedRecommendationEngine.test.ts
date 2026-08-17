@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ColorNamer } from '../../contracts/colorNamer'
-import type { RecommendationEngine } from '../../contracts/recommendationEngine'
-import type { RecommendationRequest } from '../../domain/palette'
+import type { ColorNamer } from '@/contracts'
+import type { RecommendationEngine } from '@/contracts'
+import type { RecommendationRequest } from '@/domain'
 import { NamedRecommendationEngine } from './namedRecommendationEngine'
 
 const request: RecommendationRequest = {

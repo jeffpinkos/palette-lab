@@ -1,4 +1,4 @@
-import type { PaletteColor } from '../domain/palette'
+import type { PaletteColor } from '@/domain'
 
 const HEX_PATTERN = /^#[0-9a-f]{6}$/i
 

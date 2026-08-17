@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { GroupCooccurrenceEngine } from './groupCooccurrenceEngine'
-import type { PaletteDataset } from '../../domain/palette'
+import type { PaletteDataset } from '@/domain'
 
 const dataset: PaletteDataset = {
   metadata: { id: 'sample', name: 'Sample', description: '', sourceName: 'Test', groupLabel: 'sets' },

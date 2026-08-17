@@ -1,0 +1,1 @@
+export { WadaPaletteProvider } from './wadaPaletteProvider'

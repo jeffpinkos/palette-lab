@@ -1,5 +1,5 @@
-import type { RecommendationEngine } from '../../contracts/recommendationEngine'
-import type { PaletteAssessment, PaletteAssessmentRequest, Recommendation, RecommendationRequest } from '../../domain/palette'
+import type { RecommendationEngine } from '@/contracts'
+import type { PaletteAssessment, PaletteAssessmentRequest, Recommendation, RecommendationRequest } from '@/domain'
 
 type ApiRecommendation = { color: Recommendation['color']; score: number; evidence?: Recommendation['evidence'] }
 

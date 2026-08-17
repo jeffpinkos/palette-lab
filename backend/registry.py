@@ -16,7 +16,9 @@ wada_provider = GroupedJsonPaletteProvider(
         group_label="historic combinations",
     ),
     JsonFieldMapping(collection="colors", id="index", name="name", hex="hex", rgb="rgb_array", groups="combinations"),
-    default_color_ids=("19", "112"),
+    # Keep the opening state visually contrasting while grounding it in an
+    # actual recorded relationship, so the first Wada grade earns trust.
+    default_color_ids=("19", "109"),
 )
 
 PALETTE_PROVIDERS = {wada_provider.id: wada_provider}

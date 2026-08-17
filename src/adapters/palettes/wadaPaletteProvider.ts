@@ -1,5 +1,5 @@
-import type { PaletteProvider } from '../../contracts/paletteProvider'
-import type { PaletteDataset } from '../../domain/palette'
+import type { PaletteProvider } from '@/contracts'
+import type { PaletteDataset } from '@/domain'
 
 type WadaColor = {
   index: number
@@ -44,7 +44,7 @@ export class WadaPaletteProvider implements PaletteProvider {
       colors,
       groupsByColor: Object.fromEntries(payload.colors.map((color) => [String(color.index), color.combinations.map(String)])),
       groupCount: 348,
-      defaultColorIds: ['19', '112'],
+      defaultColorIds: ['19', '109'],
     }
   }
 }

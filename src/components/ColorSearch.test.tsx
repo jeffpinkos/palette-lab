@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { PaletteColor } from '../domain/palette'
+import type { PaletteColor } from '@/domain'
 import { ColorSearch } from './ColorSearch'
 
 const colors: PaletteColor[] = [
@@ -27,6 +27,10 @@ describe('ColorSearch', () => {
   })
   it('renders removal controls with color-specific labels', () => {
     expect(render([colors[0]])).toContain('Remove Archive red')
+  })
+  it('renders a slot for every permitted selection', () => {
+    const html = render()
+    expect((html.match(/class="empty-swatch"/g) ?? [])).toHaveLength(4)
   })
   it('advertises the complete searchable color-name catalog', () => {
     expect(render()).toContain('Search 31,914 color names')

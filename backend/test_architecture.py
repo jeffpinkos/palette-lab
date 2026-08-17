@@ -328,4 +328,4 @@ def test_real_wada_provider_reports_expected_shape():
     assert len(dataset.colors) == 157
     assert dataset.group_count > 300
     assert dataset.metadata.id == "wada-1933"
-    assert dataset.default_color_ids == ("19", "112")
+    assert dataset.default_color_ids == ("19", "109")

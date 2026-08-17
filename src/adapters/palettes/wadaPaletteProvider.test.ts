@@ -46,7 +46,7 @@ describe('WadaPaletteProvider', () => {
   })
   it('supplies default selection IDs', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()))
-    expect((await new WadaPaletteProvider().load()).defaultColorIds).toEqual(['19', '112'])
+    expect((await new WadaPaletteProvider().load()).defaultColorIds).toEqual(['19', '109'])
   })
   it('declares the known group count independently of a small fixture', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()))

@@ -1,4 +1,4 @@
-import type { PaletteColor } from '../domain/palette'
+import type { PaletteColor } from '@/domain'
 
 /** Names arbitrary colors without coupling the palette or recommendation engine to a catalog. */
 export interface ColorNamer {

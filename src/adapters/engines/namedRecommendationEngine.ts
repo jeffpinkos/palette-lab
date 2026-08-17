@@ -1,6 +1,6 @@
-import type { ColorNamer } from '../../contracts/colorNamer'
-import type { RecommendationEngine } from '../../contracts/recommendationEngine'
-import type { PaletteAssessmentRequest, RecommendationRequest } from '../../domain/palette'
+import type { ColorNamer } from '@/contracts'
+import type { RecommendationEngine } from '@/contracts'
+import type { PaletteAssessmentRequest, RecommendationRequest } from '@/domain'
 
 /** Decorates generated recommendations with friendly names while preserving source-palette labels. */
 export class NamedRecommendationEngine implements RecommendationEngine {

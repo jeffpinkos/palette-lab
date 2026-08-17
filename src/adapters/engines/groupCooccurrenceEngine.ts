@@ -1,6 +1,6 @@
-import type { RecommendationEngine } from '../../contracts/recommendationEngine'
-import type { Recommendation, RecommendationRequest } from '../../domain/palette'
-import { perceptualDistance } from '../../lib/colorMath'
+import type { RecommendationEngine } from '@/contracts'
+import type { Recommendation, RecommendationRequest } from '@/domain'
+import { perceptualDistance } from '@/lib'
 
 /** Explainable baseline engine for palettes with color-to-group training signals. */
 export class GroupCooccurrenceEngine implements RecommendationEngine {

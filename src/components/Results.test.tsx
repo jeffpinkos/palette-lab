@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import type { Recommendation } from '../domain/palette'
+import type { Recommendation } from '@/domain'
 import { cssPalette, evidenceSummary, fitLabel, Results } from './Results'
 
 const results: Recommendation[] = [
@@ -19,7 +19,8 @@ describe('Results', () => {
     expect(html).toContain('Projected through 3 related Wada groups')
     expect(html).toContain('triadic to Salvia Blue')
     expect(html).toContain('Wada anchors: Sky Blue, Sea Green')
-    expect(html).toContain('Strong fit')
+    expect(html).toContain('Strong companion fit')
+    expect(html).toContain('Why this works')
   })
   it('exposes add, copy, and export actions', () => {
     const html = renderToStaticMarkup(<Results results={results} onAdd={vi.fn()} />)
@@ -38,7 +39,7 @@ describe('evidenceSummary', () => {
 })
 
 describe('fitLabel', () => {
-  it.each([[.8, 'Strong fit'], [.62, 'Strong fit'], [.61, 'Good fit'], [.48, 'Good fit'], [.47, 'Exploratory']] as const)('maps %s to %s', (score, label) => {
+  it.each([[.8, 'Strong companion fit'], [.62, 'Strong companion fit'], [.61, 'Good companion fit'], [.48, 'Good companion fit'], [.47, 'Exploratory companion']] as const)('maps %s to %s', (score, label) => {
     expect(fitLabel(score)).toBe(label)
   })
 })

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiRecommendationEngine } from './apiRecommendationEngine'
-import type { RecommendationRequest } from '../../domain/palette'
+import type { RecommendationRequest } from '@/domain'
 
 const request: RecommendationRequest = {
   dataset: {

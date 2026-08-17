@@ -1,0 +1,1 @@
+export { usePaletteLab } from './usePaletteLab'

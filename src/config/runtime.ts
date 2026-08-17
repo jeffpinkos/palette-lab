@@ -1,10 +1,10 @@
-import type { PaletteProvider } from '../contracts/paletteProvider'
-import type { RecommendationEngine } from '../contracts/recommendationEngine'
-import type { ColorNamer } from '../contracts/colorNamer'
-import { ApiRecommendationEngine } from '../adapters/engines/apiRecommendationEngine'
-import { NamedRecommendationEngine } from '../adapters/engines/namedRecommendationEngine'
-import { ColorNameListNamer } from '../adapters/names/colorNameListNamer'
-import { WadaPaletteProvider } from '../adapters/palettes/wadaPaletteProvider'
+import type { PaletteProvider } from '@/contracts'
+import type { RecommendationEngine } from '@/contracts'
+import type { ColorNamer } from '@/contracts'
+import { ApiRecommendationEngine } from '@/adapters/engines'
+import { NamedRecommendationEngine } from '@/adapters/engines'
+import { ColorNameListNamer } from '@/adapters/names'
+import { WadaPaletteProvider } from '@/adapters/palettes'
 
 export type LabRuntime = {
   paletteProvider: PaletteProvider

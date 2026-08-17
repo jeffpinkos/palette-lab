@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PaletteColor } from '../../domain/palette'
+import type { PaletteColor } from '@/domain'
 import { ColorNameListNamer } from './colorNameListNamer'
 
 const namer = new ColorNameListNamer()

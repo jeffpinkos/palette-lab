@@ -1,6 +1,6 @@
-import type { ColorNamer } from '../../contracts/colorNamer'
-import type { PaletteColor } from '../../domain/palette'
-import { rgbToOklab } from '../../lib/colorMath'
+import type { ColorNamer } from '@/contracts'
+import type { PaletteColor } from '@/domain'
+import { rgbToOklab } from '@/lib'
 
 type NameRecord = { name: string; hex: string }
 type PreparedName = NameRecord & {

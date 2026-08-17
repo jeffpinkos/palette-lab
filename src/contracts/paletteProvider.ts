@@ -1,4 +1,4 @@
-import type { PaletteDataset } from '../domain/palette'
+import type { PaletteDataset } from '@/domain'
 
 export interface PaletteProvider {
   readonly id: string

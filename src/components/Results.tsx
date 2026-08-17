@@ -1,8 +1,8 @@
 import { Copy, Download, Plus } from 'lucide-react'
 import { useState } from 'react'
-import type { PaletteColor, Recommendation } from '../domain/palette'
+import type { PaletteColor, Recommendation } from '@/domain'
 
-export const fitLabel = (score: number) => score >= 0.62 ? 'Strong fit' : score >= 0.48 ? 'Good fit' : 'Exploratory'
+export const fitLabel = (score: number) => score >= 0.62 ? 'Strong companion fit' : score >= 0.48 ? 'Good companion fit' : 'Exploratory companion'
 export const cssPalette = (results: Recommendation[]) => `:root {\n${results.map((result, index) => `  --palette-${index + 1}: ${result.color.hex};`).join('\n')}\n}`
 export const evidenceSummary = (result: Recommendation) => {
   if (!result.evidence) return ''
@@ -40,7 +40,7 @@ export function Results({ results, onAdd }: { results: Recommendation[]; onAdd: 
       {results.map((result, index) => <article className="result" key={result.color.id} style={{ animationDelay: `${index * 70}ms` }}>
         <div className="result-color" style={{ background: result.color.hex }}><span>{String(index + 1).padStart(2, '0')}</span>{result.color.metadata?.generated ? <b>Generated</b> : null}</div>
         <h3 title={result.color.name}>{result.color.name}</h3><p>{result.color.hex}</p><strong className="fit-label">{fitLabel(result.score)}</strong>
-        {result.evidence ? <div className="evidence"><b>{evidenceSummary(result)}</b>{result.evidence.details?.slice(0, 3).map((detail) => <span key={detail}>{detail}</span>)}</div> : null}
+        {result.evidence ? <div className="evidence"><b>{evidenceSummary(result)}</b>{result.evidence.details?.length ? <details><summary>Why this works</summary>{result.evidence.details.slice(0, 3).map((detail) => <span key={detail}>{detail}</span>)}</details> : null}</div> : null}
         <div className="result-actions"><button aria-label={`Add ${result.color.name} to selection`} onClick={() => onAdd(result.color)}><Plus size={14} />Add</button><button aria-label={`Copy ${result.color.hex}`} onClick={() => void copy(result.color.hex, `${result.color.hex} copied`)}><Copy size={14} />Hex</button></div>
       </article>)}
     </div>

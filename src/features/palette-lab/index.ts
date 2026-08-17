@@ -1,0 +1,5 @@
+export { LabFooter } from './LabFooter'
+export { LabHeader } from './LabHeader'
+export { MethodSection } from './MethodSection'
+export { PaletteComposer } from './PaletteComposer'
+export { RecommendationPanel } from './RecommendationPanel'
