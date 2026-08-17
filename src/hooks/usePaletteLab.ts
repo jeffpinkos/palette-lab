@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LabRuntime } from '@/config'
 import type { ColorId, HarmonyMode, PaletteAssessment, PaletteColor, PaletteDataset, Recommendation, RecommendationScope } from '@/domain'
+import { readPaletteSession, savePaletteSession } from '@/lib'
 
 export function usePaletteLab(runtime: LabRuntime) {
   const [dataset, setDataset] = useState<PaletteDataset | null>(null)
@@ -23,7 +24,16 @@ export function usePaletteLab(runtime: LabRuntime) {
       if (!active) return
       setDataset(loaded)
       const colorsById = new Map(loaded.colors.map((color) => [color.id, color]))
-      setSelected((loaded.defaultColorIds ?? []).flatMap((id) => { const color = colorsById.get(id); return color ? [color] : [] }).slice(0, runtime.maxSelections))
+      const saved = readPaletteSession()
+      const restored = saved?.colors.flatMap((color) => {
+        const archiveColor = colorsById.get(color.id)
+        return archiveColor?.hex.toLowerCase() === color.hex.toLowerCase() ? [archiveColor] : [color]
+      }).filter((color, index, colors) => colors.findIndex((item) => item.id === color.id || item.hex === color.hex) === index).slice(0, runtime.maxSelections)
+      setSelected(restored?.length ? restored : (loaded.defaultColorIds ?? []).flatMap((id) => { const color = colorsById.get(id); return color ? [color] : [] }).slice(0, runtime.maxSelections))
+      if (saved) {
+        setModeState(saved.mode)
+        setScopeState(saved.scope)
+      }
       setStatus('ready')
     }).catch((reason: unknown) => {
       if (!active) return
@@ -72,6 +82,7 @@ export function usePaletteLab(runtime: LabRuntime) {
       const nextResults = await runtime.recommendationEngine.recommend({ dataset, selectedColors: selected, mode: nextMode, scope: nextScope, limit: runtime.resultLimit })
       if (activeRequest !== requestId.current) return
       setResults(nextResults)
+      savePaletteSession({ colors: selected, mode: nextMode, scope: nextScope })
       setStatus('ready')
     } catch (reason) {
       if (activeRequest !== requestId.current) return

@@ -1,6 +1,6 @@
 export type ColorId = string
 export type HarmonyMode = 'quiet' | 'balanced' | 'vivid'
-export type RecommendationScope = 'palette' | 'spectrum'
+export type RecommendationScope = 'companions' | 'palette' | 'spectrum'
 
 export type PaletteColor = {
   id: ColorId

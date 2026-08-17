@@ -9,6 +9,7 @@ export const MODE_COPY: Record<HarmonyMode, string> = {
 }
 
 export const RECOMMENDATION_SCOPES: { value: RecommendationScope; label: string }[] = [
+  { value: 'companions', label: 'Wada companions' },
   { value: 'palette', label: 'Wada archive' },
   { value: 'spectrum', label: 'Full spectrum' },
 ]

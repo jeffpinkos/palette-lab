@@ -50,6 +50,7 @@ class ScoredCandidate:
     lch: tuple[float, float, float] = (0.0, 0.0, 0.0)
     harmony_name: str = "general"
     harmony_anchor: str = ""
+    historical_support: int = 0
 
 
 class ClusterEnsembleEngine:
@@ -663,7 +664,7 @@ class ClusterEnsembleEngine:
         }
         cluster_affinity = cluster_affinities[self._selected.algorithm]
         group_affinity = float(np.dot(candidate_group_profile, selected_group_profile))
-        if scope == "palette" and shared == 0 and group_affinity < 0.05 and cluster_affinity < 0.25:
+        if scope in {"companions", "palette"} and shared == 0 and group_affinity < 0.05 and cluster_affinity < 0.25:
             return None
         distance = float(np.linalg.norm(candidate_feature_profile - selected_feature_profile))
         proximity = math.exp(-0.5 * (distance / max(self._feature_scale, 1e-9)) ** 2)
@@ -711,6 +712,7 @@ class ClusterEnsembleEngine:
             lch=candidate_lch,
             harmony_name=harmony_name,
             harmony_anchor=harmony_anchor,
+            historical_support=shared,
         )
 
     @staticmethod
@@ -797,10 +799,19 @@ class ClusterEnsembleEngine:
         mode: str,
         limit: int,
         selected_lch: Optional[np.ndarray] = None,
+        historical_first: bool = False,
+        strict_historical: bool = False,
     ) -> list[Recommendation]:
         if not candidates or limit <= 0:
             return []
         selected_lch = np.asarray(selected_lch if selected_lch is not None else np.empty((0, 3)))
+        if historical_first:
+            historical = [candidate for candidate in candidates if candidate.historical_support > 0]
+            model_only = [candidate for candidate in candidates if candidate.historical_support == 0]
+            ranked_historical = self._rerank(historical, mode, limit, selected_lch, strict_historical=True)
+            if len(ranked_historical) >= limit:
+                return ranked_historical
+            return [*ranked_historical, *self._rerank(model_only, mode, limit - len(ranked_historical), selected_lch)]
         remaining = list(range(len(candidates)))
         chosen: list[int] = []
         diversity_weight = {"quiet": 0.025, "balanced": 0.065, "vivid": 0.10}[mode]
@@ -831,6 +842,10 @@ class ClusterEnsembleEngine:
                     eligible = vivid_candidates
             if not eligible:
                 break
+
+            if strict_historical:
+                strongest_support = max(candidates[index].historical_support for index in eligible)
+                eligible = [index for index in eligible if candidates[index].historical_support == strongest_support]
 
             role_counts = {
                 role: sum(candidates[index].harmony_name == role for index in chosen)
@@ -883,7 +898,7 @@ class ClusterEnsembleEngine:
             return []
         if mode not in {"quiet", "balanced", "vivid"}:
             raise ValueError(f"Unknown harmony mode: {mode}")
-        if scope not in {"palette", "spectrum"}:
+        if scope not in {"companions", "palette", "spectrum"}:
             raise ValueError(f"Unknown recommendation scope: {scope}")
 
         selected_anchor_rows: list[tuple[int, float]] = []
@@ -909,7 +924,7 @@ class ClusterEnsembleEngine:
         selected_labs = np.asarray([rgb_to_oklab(color.rgb) for color in selected_colors])
         selected_lch = np.asarray([rgb_to_oklch(color.rgb) for color in selected_colors])
 
-        pool = self._dataset.colors if scope == "palette" else tuple(self._spectrum_candidates(selected_colors, mode))
+        pool = self._dataset.colors if scope in {"companions", "palette"} else tuple(self._spectrum_candidates(selected_colors, mode))
         scored = [
             scored_candidate
             for candidate in pool
@@ -922,7 +937,10 @@ class ClusterEnsembleEngine:
             if scored_candidate is not None
         ]
         self._attach_consensus_confidence(scored)
-        return self._rerank(scored, mode, limit, selected_lch)
+        if scope == "companions":
+            scored = [candidate for candidate in scored if candidate.historical_support > 0]
+            return self._rerank(scored, mode, limit, selected_lch, strict_historical=True)
+        return self._rerank(scored, mode, limit, selected_lch, historical_first=scope == "palette")
 
     @staticmethod
     def _grade(score: int) -> tuple[str, str, str]:

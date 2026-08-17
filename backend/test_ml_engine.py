@@ -308,7 +308,7 @@ def test_recommendations_explain_model_and_historical_fit(trained_engine):
     assert any(name in result.evidence_details[1] for name in ("support", "contrast"))
 
 
-@pytest.mark.parametrize("scope", ["palette", "spectrum"])
+@pytest.mark.parametrize("scope", ["companions", "palette", "spectrum"])
 def test_recommendation_score_weights_are_normalized(scope):
     weights = ClusterEnsembleEngine._score_weights(scope)
     assert set(weights) == {"group", "cluster", "proximity", "mood", "relation", "harmony"}
@@ -541,6 +541,26 @@ def test_balanced_archive_palette_diversifies_harmony_roles_and_names_anchors(wa
     ]
     assert max(roles.count(role) for role in set(roles)) <= 2
     assert all(any(f"to {name}" in result.evidence_details[0] for name in selected_names) for result in results)
+
+
+def test_wada_companions_only_returns_recorded_cooccurrences(wada_engine):
+    dataset = wada_provider.load()
+    etruscan = next(color for color in dataset.colors if color.name == "Etruscan Red")
+    results = wada_engine.recommend([etruscan], "balanced", 12, "companions")
+    observed_groups = dataset.groups_by_color[etruscan.id]
+    assert results
+    assert all(dataset.groups_by_color[result.color.id] & observed_groups for result in results)
+    support = [len(dataset.groups_by_color[result.color.id] & observed_groups) for result in results]
+    assert support == sorted(support, reverse=True)
+
+
+def test_wada_archive_ranks_recorded_cooccurrences_before_model_only_colors(wada_engine):
+    dataset = wada_provider.load()
+    etruscan = next(color for color in dataset.colors if color.name == "Etruscan Red")
+    results = wada_engine.recommend([etruscan], "balanced", 4, "palette")
+    observed_groups = dataset.groups_by_color[etruscan.id]
+    assert len(results) == 4
+    assert all(dataset.groups_by_color[result.color.id] & observed_groups for result in results)
 
 
 def test_known_color_has_one_exact_anchor(trained_engine):

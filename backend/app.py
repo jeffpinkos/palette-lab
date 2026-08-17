@@ -25,7 +25,7 @@ class HarmonyRequest(BaseModel):
     engine_id: str
     colors: list[ColorInput] = Field(min_length=1, max_length=4)
     mode: Literal["quiet", "balanced", "vivid"] = "balanced"
-    scope: Literal["palette", "spectrum"] = "palette"
+    scope: Literal["companions", "palette", "spectrum"] = "palette"
     limit: int = Field(default=4, ge=1, le=12)
 
 
